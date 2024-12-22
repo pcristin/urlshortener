@@ -3,22 +3,21 @@ package app
 import (
 	"errors"
 	"io"
-	"log"
 	randMath "math/rand/v2"
 	"net/http"
 )
 
 var urlStorage = make(map[string]string)
 
-func EncodeUrlHandler(res http.ResponseWriter, req *http.Request) {
+func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longUrl, err := io.ReadAll(req.Body)
 
-	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain" || len(longUrl) == 0 {
+	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" || len(longUrl) == 0 {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
 
-	token := encodeUrl(string(longUrl))
+	token := encodeURL(string(longUrl))
 	res.Header().Set("content-type", "text/plain")
 	res.Header()["Date"] = nil
 	res.WriteHeader(http.StatusCreated)
@@ -26,9 +25,8 @@ func EncodeUrlHandler(res http.ResponseWriter, req *http.Request) {
 	res.Write([]byte(resBody))
 }
 
-func DecodeUrlHandler(res http.ResponseWriter, req *http.Request) {
+func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet || req.Host != "localhost:8080" || req.Header.Get("Content-Type") != "text/plain" {
-		log.Printf("Received request with method: %v", req.Method)
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
@@ -37,7 +35,7 @@ func DecodeUrlHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
-	longUrl, err := decodeUrl(token)
+	longUrl, err := decodeURL(token)
 	if err != nil {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
@@ -49,7 +47,7 @@ func DecodeUrlHandler(res http.ResponseWriter, req *http.Request) {
 	res.WriteHeader(http.StatusTemporaryRedirect)
 }
 
-func decodeUrl(token string) (string, error) {
+func decodeURL(token string) (string, error) {
 	if url, found := urlStorage[token]; found {
 		return url, nil
 	} else {
@@ -70,7 +68,7 @@ func generateToken(length int) string {
 	return string(token)
 }
 
-func encodeUrl(url string) string {
+func encodeURL(url string) string {
 	// Creating the random length (from 6 to including 9) slice of bytes
 	length := randRange(6, 10)
 	token := generateToken(length)
