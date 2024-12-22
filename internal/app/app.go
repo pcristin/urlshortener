@@ -21,7 +21,7 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("content-type", "text/plain")
 	res.Header()["Date"] = nil
 	res.WriteHeader(http.StatusCreated)
-	resBody := "https://" + req.Host + "/" + string(token)
+	resBody := "http://" + req.Host + "/" + string(token)
 	res.Write([]byte(resBody))
 }
 
