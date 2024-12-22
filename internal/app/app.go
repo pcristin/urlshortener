@@ -10,14 +10,14 @@ import (
 var urlStorage = make(map[string]string)
 
 func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
-	longUrl, err := io.ReadAll(req.Body)
+	longURL, err := io.ReadAll(req.Body)
 
-	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" || len(longUrl) == 0 {
+	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" || len(longURL) == 0 {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
 
-	token := encodeURL(string(longUrl))
+	token := encodeURL(string(longURL))
 	res.Header().Set("content-type", "text/plain")
 	res.Header()["Date"] = nil
 	res.WriteHeader(http.StatusCreated)
@@ -26,7 +26,7 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 }
 
 func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet || req.Host != "localhost:8080" || req.Header.Get("Content-Type") != "text/plain" {
+	if req.Method != http.MethodGet || req.Host != "localhost:8080" {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
@@ -35,12 +35,12 @@ func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
-	longUrl, err := decodeURL(token)
+	longURL, err := decodeURL(token)
 	if err != nil {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
-	res.Header().Add("Location", longUrl)
+	res.Header().Add("Location", longURL)
 	res.Header()["Date"] = nil
 	res.Header()["Content-Length"] = nil
 	res.Header()["Transfer-Encoding"] = nil

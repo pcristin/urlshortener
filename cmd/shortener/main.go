@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"urlshortener/internal/app"
 )
@@ -13,6 +12,6 @@ func main() {
 
 	err := http.ListenAndServe("localhost:8080", mux)
 	if err != nil {
-		log.Fatalf("Something went wrong! Error: %v", err)
+		panic("Something went wrong!")
 	}
 }
