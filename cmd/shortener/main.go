@@ -2,7 +2,8 @@ package main
 
 import (
 	"net/http"
-	"urlshortener/internal/app"
+
+	"github.com/pcristin/urlshortener/internal/app"
 )
 
 func main() {

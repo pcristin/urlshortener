@@ -3,6 +3,8 @@ package app
 import (
 	"io"
 	"net/http"
+
+	uu "github.com/pcristin/urlshortener/internal/urlutils"
 )
 
 func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
@@ -13,7 +15,7 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	token := uu.encodeURL(string(longURL))
+	token := uu.EncodeURL(string(longURL))
 	res.Header().Set("content-type", "text/plain")
 	res.Header()["Date"] = nil
 	res.WriteHeader(http.StatusCreated)
@@ -31,7 +33,7 @@ func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
-	longURL, err := uu.decodeURL(token)
+	longURL, err := uu.DecodeURL(token)
 	if err != nil {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return

@@ -7,7 +7,7 @@ import (
 
 var urlStorage = make(map[string]string)
 
-func decodeURL(token string) (string, error) {
+func DecodeURL(token string) (string, error) {
 	if url, found := urlStorage[token]; found {
 		return url, nil
 	} else {
@@ -28,7 +28,7 @@ func generateToken(length int) string {
 	return string(token)
 }
 
-func encodeURL(url string) string {
+func EncodeURL(url string) string {
 	// Creating the random length (from 6 to including 9) slice of bytes
 	length := randRange(6, 10)
 	token := generateToken(length)
