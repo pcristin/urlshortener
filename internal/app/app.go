@@ -1,13 +1,9 @@
 package app
 
 import (
-	"errors"
 	"io"
-	randMath "math/rand/v2"
 	"net/http"
 )
-
-var urlStorage = make(map[string]string)
 
 func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
@@ -17,7 +13,7 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	token := encodeURL(string(longURL))
+	token := uu.encodeURL(string(longURL))
 	res.Header().Set("content-type", "text/plain")
 	res.Header()["Date"] = nil
 	res.WriteHeader(http.StatusCreated)
@@ -35,7 +31,7 @@ func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
-	longURL, err := decodeURL(token)
+	longURL, err := uu.decodeURL(token)
 	if err != nil {
 		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
@@ -45,33 +41,4 @@ func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	res.Header()["Content-Length"] = nil
 	res.Header()["Transfer-Encoding"] = nil
 	res.WriteHeader(http.StatusTemporaryRedirect)
-}
-
-func decodeURL(token string) (string, error) {
-	if url, found := urlStorage[token]; found {
-		return url, nil
-	} else {
-		return "", errors.New("haven't found the URL")
-	}
-}
-
-func randRange(a int, b int) int {
-	return randMath.IntN(b-a) + a
-}
-
-func generateToken(length int) string {
-	var letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
-	token := make([]byte, length)
-	for i := range token {
-		token[i] = letters[randMath.IntN(len(letters))]
-	}
-	return string(token)
-}
-
-func encodeURL(url string) string {
-	// Creating the random length (from 6 to including 9) slice of bytes
-	length := randRange(6, 10)
-	token := generateToken(length)
-	urlStorage[string(token)] = url
-	return string(token)
 }
