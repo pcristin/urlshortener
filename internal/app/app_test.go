@@ -107,7 +107,7 @@ func TestEncodeURLHandler(t *testing.T) {
 			res := wr.Result()
 
 			// Close request connection
-			defer req.Body.Close()
+			defer res.Body.Close()
 
 			//Test status codes
 			if tc.reqParams.sentData == "" {
@@ -186,7 +186,7 @@ func TestDecodeURLHandler(t *testing.T) {
 			res := wr.Result()
 
 			// Closing connection
-			defer req.Body.Close()
+			defer res.Body.Close()
 
 			// Test status codes
 			assert.Equal(t, tc.reqParams.expectedCode, res.StatusCode)
