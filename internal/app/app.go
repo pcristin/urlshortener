@@ -16,6 +16,8 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	defer req.Body.Close()
+
 	token := uu.EncodeURL(string(longURL))
 	res.Header().Set("content-type", "text/plain")
 	res.Header()["Date"] = nil
