@@ -1,44 +1,46 @@
 package app
 
 import (
-	"log"
+	"io"
+	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	uu "github.com/pcristin/urlshortener/internal/urlutils"
-	"github.com/valyala/fasthttp"
 )
 
-func FastHTTPEncodeURLHandler(ctx *fasthttp.RequestCtx) {
-	// Setting up response headers
-	ctx.Response.Header.Reset()
-	ctx.SetContentType("text/plain")
+func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
+	longURL, err := io.ReadAll(req.Body)
 
-	longURL := string(ctx.PostBody())
-
-	if string(ctx.Method()) != "POST" || string(ctx.Host()) != "localhost:8080" || !uu.URLCheck(longURL) {
-		ctx.Error("bad request", fasthttp.StatusBadRequest)
+	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" || !uu.URLCheck(string(longURL)) {
+		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
 
-	token := uu.EncodeURL(longURL)
-	ctx.SetStatusCode(fasthttp.StatusCreated)
-	ctx.SetBody([]byte("http://" + string(ctx.Host()) + "/" + string(token)))
+	token := uu.EncodeURL(string(longURL))
+	res.Header().Set("content-type", "text/plain")
+	res.Header()["Date"] = nil
+	res.WriteHeader(http.StatusCreated)
+	resBody := "http://" + req.Host + "/" + string(token)
+	res.Write([]byte(resBody))
 }
 
-func FastHTTPDecodeURLHandler(ctx *fasthttp.RequestCtx) {
-	// Reseting headers
-	ctx.Response.Header.Reset()
-
-	if string(ctx.Method()) != "GET" || string(ctx.Host()) != "localhost:8080" {
-		ctx.Error("bad request", fasthttp.StatusBadRequest)
+func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet || req.Host != "localhost:8080" {
+		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
-	token := ctx.UserValue("id").(string)
-	log.Println(token)
+	token := chi.URLParam(req, "id")
+	if token == "" {
+		http.Error(res, "Bad request!", http.StatusBadRequest)
+		return
+	}
 	longURL, err := uu.DecodeURL(token)
 	if err != nil {
-		ctx.Error("bad request", fasthttp.StatusBadRequest)
+		http.Error(res, "Bad request!", http.StatusBadRequest)
 		return
 	}
-	ctx.Response.Header.Set("Location", longURL)
-	ctx.SetStatusCode(fasthttp.StatusTemporaryRedirect)
+	res.Header().Add("Location", longURL)
+	res.Header()["Date"] = nil
+	res.Header()["Content-Length"] = nil
+	res.WriteHeader(http.StatusTemporaryRedirect)
 }

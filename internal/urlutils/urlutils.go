@@ -6,10 +6,10 @@ import (
 	"regexp"
 )
 
-var urlStorage = make(map[string]string)
+var URLStorage = make(map[string]string)
 
 func DecodeURL(token string) (string, error) {
-	if url, found := urlStorage[token]; found {
+	if url, found := URLStorage[token]; found {
 		return url, nil
 	} else {
 		return "", errors.New("haven't found the URL")
@@ -34,7 +34,7 @@ func EncodeURL(url string) string {
 	// Creating the random length (from 6 to including 9) slice of bytes
 	length := randRange(6, 10)
 	token := generateToken(length)
-	urlStorage[string(token)] = url
+	URLStorage[string(token)] = url
 	return string(token)
 }
 
