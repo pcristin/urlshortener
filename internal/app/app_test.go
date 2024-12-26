@@ -81,7 +81,7 @@ func TestEncodeURLHandler(t *testing.T) {
 				return
 			} else {
 				fmt.Printf("POST data (long url): %s\n", tc.reqParams.sentData)
-				assert.Equal(t, res.StatusCode, tc.reqParams.expectedCode)
+				assert.Equal(t, tc.reqParams.expectedCode, res.StatusCode)
 				return
 			}
 

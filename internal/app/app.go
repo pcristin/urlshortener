@@ -11,8 +11,9 @@ import (
 func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
 
-	if req.Method != http.MethodPost || err != nil || !uu.URLCheck(string(longURL)) || req.Host != "localhost:8080" {
+	if req.Method != http.MethodPost || err != nil || !uu.URLCheck(string(longURL)) {
 		http.Error(res, "bad request", http.StatusBadRequest)
+		return
 	}
 
 	token := uu.EncodeURL(string(longURL))
