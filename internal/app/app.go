@@ -11,7 +11,7 @@ import (
 func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
 
-	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain" || !uu.URLCheck(string(longURL)) {
+	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain" {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
