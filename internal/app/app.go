@@ -11,10 +11,13 @@ import (
 func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
 
-	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain" {
+	if err != nil {
 		http.Error(res, "bad request", http.StatusBadRequest)
-		return
 	}
+	// if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain" || !uu.URLCheck(string(longURL)) {
+	// 	http.Error(res, "bad request", http.StatusBadRequest)
+	// 	return
+	// }
 
 	token := uu.EncodeURL(string(longURL))
 	res.Header().Set("content-type", "text/plain")
