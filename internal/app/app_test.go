@@ -185,7 +185,7 @@ func TestDecodeURLHandler(t *testing.T) {
 
 			// Test status codes
 			assert.Equal(t, tc.reqParams.expectedCode, res.StatusCode)
-			fmt.Printf("Raw Path value: %v", req.URL.Path)
+			fmt.Printf("Raw Path value: %v\n", req.URL.Path)
 
 		})
 	}
