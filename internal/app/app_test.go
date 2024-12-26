@@ -2,21 +2,18 @@ package app
 
 import (
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/valyala/fasthttp"
 )
 
-func TestEncodeURLHandler(t *testing.T) {
+func TestFastHTTPEncodeURLHandler(t *testing.T) {
 	type reqParams struct {
-		method          string
-		sentData        string
-		sentContentType string
-		sentHost        string
-		expectedCode    int
+		method       string
+		sentData     string
+		sentHost     string
+		expectedCode int
 	}
 
 	tt := []struct {
@@ -26,115 +23,76 @@ func TestEncodeURLHandler(t *testing.T) {
 		{
 			name: "post wo data",
 			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "",
-				sentContentType: "text/plain; charset=utf-8",
-				sentHost:        "localhost:8080",
-				expectedCode:    http.StatusBadRequest,
+				method:       "POST",
+				sentData:     "",
+				sentHost:     "localhost:8080",
+				expectedCode: fasthttp.StatusBadRequest,
 			},
 		},
 		{
 			name: "post with data",
 			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "https://google.com",
-				sentContentType: "text/plain; charset=utf-8",
-				sentHost:        "localhost:8080",
-				expectedCode:    http.StatusCreated,
+				method:       "POST",
+				sentData:     "https://google.com",
+				sentHost:     "localhost:8080",
+				expectedCode: fasthttp.StatusCreated,
 			},
 		},
 		{
 			name: "post with strange data",
 			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "app",
-				sentContentType: "text/plain; charset=utf-8",
-				sentHost:        "localhost:8080",
-				expectedCode:    http.StatusBadRequest,
+				method:       "POST",
+				sentData:     "app",
+				sentHost:     "localhost:8080",
+				expectedCode: fasthttp.StatusBadRequest,
 			},
 		},
 		{
 			name: "get request",
 			reqParams: reqParams{
-				method:          http.MethodGet,
-				sentHost:        "localhost:8080",
-				sentContentType: "text/plain; charset=utf-8",
-				expectedCode:    http.StatusBadRequest,
-			},
-		},
-		{
-			name: "put request",
-			reqParams: reqParams{
-				method:          http.MethodPut,
-				sentHost:        "localhost:8080",
-				sentContentType: "text/plain; charset=utf-8",
-				expectedCode:    http.StatusBadRequest,
+				method:       "GET",
+				sentHost:     "localhost:8080",
+				expectedCode: fasthttp.StatusBadRequest,
 			},
 		},
 		{
 			name: "wrong host request",
 			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "yandex.mail.ru",
-				sentHost:        "",
-				sentContentType: "text/plain; charset=utf-8",
-				expectedCode:    http.StatusBadRequest,
-			},
-		},
-		{
-			name: "wrong content type",
-			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "yandex.mail.ru",
-				sentHost:        "localhost:8080",
-				sentContentType: "application/json",
-				expectedCode:    http.StatusBadRequest,
+				method:       "POST",
+				sentData:     "yandex.mail.ru",
+				sentHost:     "",
+				expectedCode: fasthttp.StatusBadRequest,
 			},
 		},
 	}
+
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			// Init request
-			req := httptest.NewRequest(http.MethodPost, "localhost:8080", strings.NewReader(tc.reqParams.sentData))
-			req.Host = tc.reqParams.sentHost
-			req.Header.Set("Content-Type", tc.reqParams.sentContentType)
+			// Create request
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.Header.SetMethod(tc.reqParams.method)
+			ctx.Request.SetHost(tc.reqParams.sentHost)
+			ctx.Request.SetBody([]byte(tc.reqParams.sentData))
 
-			// Init recorder (response writer)
-			wr := httptest.NewRecorder()
-			EncodeURLHandler(wr, req)
+			// Call handler
+			FastHTTPEncodeURLHandler(ctx)
 
-			// Init result
-			res := wr.Result()
-
-			// Close request connection
-			defer res.Body.Close()
-
-			//Test status codes
-			if tc.reqParams.sentData == "" {
-				assert.Equal(t, res.StatusCode, tc.reqParams.expectedCode)
-				return
-			} else {
+			// Test status codes
+			assert.Equal(t, tc.reqParams.expectedCode, ctx.Response.StatusCode())
+			if tc.reqParams.sentData != "" {
 				fmt.Printf("POST data (long url): %s\n", tc.reqParams.sentData)
-				assert.Equal(t, res.StatusCode, tc.reqParams.expectedCode)
-				return
 			}
-
 		})
 	}
 }
 
-func TestDecodeURLHandler(t *testing.T) {
+func TestFastHTTPDecodeURLHandler(t *testing.T) {
 	type reqParams struct {
 		method       string
 		sentHost     string
-		sentPath     string
+		token        string
 		expectedCode int
-		urlStorage   map[string]string
 	}
-
-	var URLStorage = make(map[string]string)
-
-	URLStorage["f12rw2t"] = "https://dzen.ru"
 
 	tt := []struct {
 		name      string
@@ -143,55 +101,46 @@ func TestDecodeURLHandler(t *testing.T) {
 		{
 			name: "post method",
 			reqParams: reqParams{
-				method:       http.MethodPost,
+				method:       "POST",
 				sentHost:     "localhost:8080",
-				sentPath:     "/2gr",
-				expectedCode: http.StatusBadRequest,
-				urlStorage:   URLStorage,
+				token:        "2gr",
+				expectedCode: fasthttp.StatusBadRequest,
 			},
 		},
 		{
 			name: "empty id",
 			reqParams: reqParams{
-				method:       http.MethodGet,
+				method:       "GET",
 				sentHost:     "localhost:8080",
-				sentPath:     "/",
-				expectedCode: http.StatusBadRequest,
-				urlStorage:   URLStorage,
+				token:        "",
+				expectedCode: fasthttp.StatusBadRequest,
 			},
 		},
 		{
-			name: "empty id",
+			name: "wrong host",
 			reqParams: reqParams{
-				method:       http.MethodGet,
+				method:       "GET",
 				sentHost:     "",
-				sentPath:     "/greg1451",
-				expectedCode: http.StatusBadRequest,
-				urlStorage:   URLStorage,
+				token:        "greg1451",
+				expectedCode: fasthttp.StatusBadRequest,
 			},
 		},
 	}
+
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			// Init request
-			req := httptest.NewRequest(tc.reqParams.method, "localhost:8080", nil)
-			req.URL.Path = tc.reqParams.sentPath
-			req.Host = tc.reqParams.sentHost
+			// Create request
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.Header.SetMethod(tc.reqParams.method)
+			ctx.Request.SetHost(tc.reqParams.sentHost)
+			ctx.SetUserValue("id", tc.reqParams.token)
 
-			// Init recorder (response writer)
-			wr := httptest.NewRecorder()
-			DecodeURLHandler(wr, req)
-
-			// Init result object
-			res := wr.Result()
-
-			// Closing connection
-			defer res.Body.Close()
+			// Call handler
+			FastHTTPDecodeURLHandler(ctx)
 
 			// Test status codes
-			assert.Equal(t, tc.reqParams.expectedCode, res.StatusCode)
-			fmt.Printf("Raw Path value: %v", req.URL.Path)
-
+			assert.Equal(t, tc.reqParams.expectedCode, ctx.Response.StatusCode())
+			fmt.Printf("Token value: %v\n", tc.reqParams.token)
 		})
 	}
 }

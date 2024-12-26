@@ -1,18 +1,19 @@
 package main
 
 import (
-	"net/http"
+	"log"
 
+	"github.com/fasthttp/router"
 	"github.com/pcristin/urlshortener/internal/app"
+	"github.com/valyala/fasthttp"
 )
 
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", app.EncodeURLHandler)
-	mux.HandleFunc("/{id}", app.DecodeURLHandler)
+	r := router.New()
+	r.POST("/", app.FastHTTPEncodeURLHandler)
+	r.GET("/{id}", app.FastHTTPDecodeURLHandler)
 
-	err := http.ListenAndServe("localhost:8080", mux)
-	if err != nil {
-		panic("Something went wrong!")
+	if err := fasthttp.ListenAndServe("localhost:8080", r.Handler); err != nil {
+		log.Fatalf("error in ListenAndServe: %v", err)
 	}
 }
