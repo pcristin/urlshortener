@@ -11,8 +11,8 @@ import (
 func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
 
-	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" || !uu.URLCheck(string(longURL)) {
-		http.Error(res, "Bad request!", http.StatusBadRequest)
+	if req.Method != http.MethodPost || req.Host != "localhost:8080" || err != nil || req.Header.Get("Content-Type") != "text/plain" || !uu.URLCheck(string(longURL)) {
+		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 
@@ -26,17 +26,17 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 
 func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet || req.Host != "localhost:8080" {
-		http.Error(res, "Bad request!", http.StatusBadRequest)
+		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 	token := chi.URLParam(req, "id")
 	if token == "" {
-		http.Error(res, "Bad request!", http.StatusBadRequest)
+		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 	longURL, err := uu.DecodeURL(token)
 	if err != nil {
-		http.Error(res, "Bad request!", http.StatusBadRequest)
+		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 	res.Header().Add("Location", longURL)
