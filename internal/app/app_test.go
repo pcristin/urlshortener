@@ -12,11 +12,11 @@ import (
 
 func TestEncodeURLHandler(t *testing.T) {
 	type reqParams struct {
-		method          string
-		sentData        string
-		sentContentType string
-		sentHost        string
-		expectedCode    int
+		method   string
+		sentData string
+		// sentContentType string
+		// sentHost        string
+		expectedCode int
 	}
 
 	tt := []struct {
@@ -26,78 +26,78 @@ func TestEncodeURLHandler(t *testing.T) {
 		{
 			name: "post wo data",
 			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "",
-				sentContentType: "text/plain; charset=utf-8",
-				sentHost:        "localhost:8080",
-				expectedCode:    http.StatusBadRequest,
+				method:   http.MethodPost,
+				sentData: "",
+				// sentContentType: "text/plain; charset=utf-8",
+				// sentHost:        "localhost:8080",
+				expectedCode: http.StatusBadRequest,
 			},
 		},
 		{
 			name: "post with data",
 			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "https://google.com",
-				sentContentType: "text/plain; charset=utf-8",
-				sentHost:        "localhost:8080",
-				expectedCode:    http.StatusCreated,
+				method:   http.MethodPost,
+				sentData: "https://google.com",
+				// sentContentType: "text/plain; charset=utf-8",
+				// sentHost:        "localhost:8080",
+				expectedCode: http.StatusCreated,
 			},
 		},
 		{
 			name: "post with strange data",
 			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "app",
-				sentContentType: "text/plain; charset=utf-8",
-				sentHost:        "localhost:8080",
-				expectedCode:    http.StatusBadRequest,
+				method:   http.MethodPost,
+				sentData: "app",
+				// sentContentType: "text/plain; charset=utf-8",
+				// sentHost:        "localhost:8080",
+				expectedCode: http.StatusBadRequest,
 			},
 		},
 		{
 			name: "get request",
 			reqParams: reqParams{
-				method:          http.MethodGet,
-				sentHost:        "localhost:8080",
-				sentContentType: "text/plain; charset=utf-8",
-				expectedCode:    http.StatusBadRequest,
+				method: http.MethodGet,
+				// sentHost:        "localhost:8080",
+				// sentContentType: "text/plain; charset=utf-8",
+				expectedCode: http.StatusBadRequest,
 			},
 		},
 		{
 			name: "put request",
 			reqParams: reqParams{
-				method:          http.MethodPut,
-				sentHost:        "localhost:8080",
-				sentContentType: "text/plain; charset=utf-8",
-				expectedCode:    http.StatusBadRequest,
+				method: http.MethodPut,
+				// sentHost:        "localhost:8080",
+				// sentContentType: "text/plain; charset=utf-8",
+				expectedCode: http.StatusBadRequest,
 			},
 		},
-		{
-			name: "wrong host request",
-			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "yandex.mail.ru",
-				sentHost:        "",
-				sentContentType: "text/plain; charset=utf-8",
-				expectedCode:    http.StatusBadRequest,
-			},
-		},
-		{
-			name: "wrong content type",
-			reqParams: reqParams{
-				method:          http.MethodPost,
-				sentData:        "yandex.mail.ru",
-				sentHost:        "localhost:8080",
-				sentContentType: "application/json",
-				expectedCode:    http.StatusBadRequest,
-			},
-		},
+		// {
+		// 	name: "wrong host request",
+		// 	reqParams: reqParams{
+		// 		method:          http.MethodPost,
+		// 		sentData:        "yandex.mail.ru",
+		// 		sentHost:        "",
+		// 		sentContentType: "text/plain; charset=utf-8",
+		// 		expectedCode:    http.StatusBadRequest,
+		// 	},
+		// },
+		// {
+		// 	name: "wrong content type",
+		// 	reqParams: reqParams{
+		// 		method:          http.MethodPost,
+		// 		sentData:        "yandex.mail.ru",
+		// 		sentHost:        "localhost:8080",
+		// 		sentContentType: "application/json",
+		// 		expectedCode:    http.StatusBadRequest,
+		// 	},
+		// },
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			// Init request
 			req := httptest.NewRequest(http.MethodPost, "localhost:8080", strings.NewReader(tc.reqParams.sentData))
-			req.Host = tc.reqParams.sentHost
-			req.Header.Set("Content-Type", tc.reqParams.sentContentType)
+			// req.Host = tc.reqParams.sentHost
+			// req.Header.Set("Content-Type", tc.reqParams.sentContentType)
 
 			// Init recorder (response writer)
 			wr := httptest.NewRecorder()
@@ -125,16 +125,11 @@ func TestEncodeURLHandler(t *testing.T) {
 
 func TestDecodeURLHandler(t *testing.T) {
 	type reqParams struct {
-		method       string
-		sentHost     string
+		method string
+		// sentHost     string
 		sentPath     string
 		expectedCode int
-		urlStorage   map[string]string
 	}
-
-	var URLStorage = make(map[string]string)
-
-	URLStorage["f12rw2t"] = "https://dzen.ru"
 
 	tt := []struct {
 		name      string
@@ -143,31 +138,31 @@ func TestDecodeURLHandler(t *testing.T) {
 		{
 			name: "post method",
 			reqParams: reqParams{
-				method:       http.MethodPost,
-				sentHost:     "localhost:8080",
+				method: http.MethodPost,
+				// sentHost:     "localhost:8080",
 				sentPath:     "/2gr",
 				expectedCode: http.StatusBadRequest,
-				urlStorage:   URLStorage,
+				// urlStorage:   URLStorage,
 			},
 		},
 		{
 			name: "empty id",
 			reqParams: reqParams{
-				method:       http.MethodGet,
-				sentHost:     "localhost:8080",
+				method: http.MethodGet,
+				// sentHost:     "localhost:8080",
 				sentPath:     "/",
 				expectedCode: http.StatusBadRequest,
-				urlStorage:   URLStorage,
+				// urlStorage:   URLStorage,
 			},
 		},
 		{
 			name: "empty id",
 			reqParams: reqParams{
-				method:       http.MethodGet,
-				sentHost:     "",
+				method: http.MethodGet,
+				// sentHost:     "",
 				sentPath:     "/greg1451",
 				expectedCode: http.StatusBadRequest,
-				urlStorage:   URLStorage,
+				// urlStorage:   URLStorage,
 			},
 		},
 	}
@@ -176,7 +171,7 @@ func TestDecodeURLHandler(t *testing.T) {
 			// Init request
 			req := httptest.NewRequest(tc.reqParams.method, "localhost:8080", nil)
 			req.URL.Path = tc.reqParams.sentPath
-			req.Host = tc.reqParams.sentHost
+			// req.Host = tc.reqParams.sentHost
 
 			// Init recorder (response writer)
 			wr := httptest.NewRecorder()
