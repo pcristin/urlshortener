@@ -14,7 +14,7 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
 
 	if req.Method != http.MethodPost || err != nil || !uu.URLCheck(string(longURL)) {
-		http.Error(res, "bad request", http.StatusBadRequest)
+		http.Error(res, "bad request\r\n", http.StatusBadRequest)
 		return
 	}
 
@@ -35,12 +35,12 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 
 func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(res, "bad request", http.StatusBadRequest)
+		http.Error(res, "bad request\r\n", http.StatusBadRequest)
 		return
 	}
 	token := chi.URLParam(req, "id")
 	if token == "" {
-		http.Error(res, "bad request", http.StatusBadRequest)
+		http.Error(res, "bad request\r\n", http.StatusBadRequest)
 		return
 	}
 
@@ -48,7 +48,7 @@ func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 
 	longURL, err := uu.DecodeURL(token)
 	if err != nil {
-		http.Error(res, "bad request", http.StatusBadRequest)
+		http.Error(res, "bad request\r\n", http.StatusBadRequest)
 		return
 	}
 	res.Header().Add("Location", longURL)
