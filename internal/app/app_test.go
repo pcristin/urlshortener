@@ -64,6 +64,7 @@ func TestEncodeURLHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Init request
 			req := httptest.NewRequest(http.MethodPost, "localhost:8080", strings.NewReader(tc.reqParams.sentData))
+			req.Header.Set("Content-Type", "text/plain; charset=utf-8")
 
 			// Init recorder (response writer)
 			wr := httptest.NewRecorder()

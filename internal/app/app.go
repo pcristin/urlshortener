@@ -14,7 +14,8 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
 	defer req.Body.Close()
 
-	if req.Method != http.MethodPost || err != nil || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" || len(longURL) == 0 || !uu.URLCheck(string(longURL)) {
+	if req.Method != http.MethodPost || err != nil || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" || string(longURL) == "" ||
+		!uu.URLCheck(string(longURL)) {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
