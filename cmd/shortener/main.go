@@ -17,7 +17,7 @@ func main() {
 	r.Post("/", app.EncodeURLHandler)
 	r.Get("/{id}", app.DecodeURLHandler)
 
-	if err := http.ListenAndServe(config.OptionsFlag.ServerURL, r); err != nil {
+	if err := http.ListenAndServe("localhost:8080", r); err != nil {
 		log.Fatalf("error in ListenAndServe: %v", err)
 	}
 }
