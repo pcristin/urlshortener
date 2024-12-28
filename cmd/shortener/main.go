@@ -18,7 +18,7 @@ func main() {
 	r.Post("/", app.EncodeURLHandler)
 	r.Get("/{id}", app.DecodeURLHandler)
 
-	log.Printf("Running server on ServerURL=%q\n", config.OptionsFlag.ServerURL)
+	log.Printf("Running server on ServerURL %s\n", config.OptionsFlag.ServerURL)
 
 	if err := http.ListenAndServe(config.OptionsFlag.ServerURL, r); err != nil {
 		log.Fatalf("error in ListenAndServe: %v", err)
