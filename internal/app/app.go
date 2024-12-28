@@ -13,7 +13,7 @@ import (
 func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
 
-	if req.Method != http.MethodPost || err != nil || string(longURL) == "" {
+	if req.Method != http.MethodPost || err != nil || !uu.URLCheck(string(longURL)) {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
