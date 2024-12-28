@@ -12,20 +12,22 @@ import (
 
 func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
-	defer req.Body.Close()
 
-	if req.Method != http.MethodPost || err != nil || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" || !uu.URLCheck(string(longURL)) {
+	if req.Method != http.MethodPost || err != nil || !uu.URLCheck(string(longURL)) {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 
 	fmt.Printf("Encoding: Provided long URL: %s\r\n", longURL)
 
+	defer req.Body.Close()
+
 	token := uu.EncodeURL(string(longURL))
 
 	fmt.Printf("Encoding: Generated token %s for %s\r\n", string(token), longURL)
 
-	res.Header().Set("Content-Type", "text/plain")
+	res.Header().Set("content-type", "text/plain")
+	res.Header()["Date"] = nil
 	res.WriteHeader(http.StatusCreated)
 	resBody := "http://" + req.Host + "/" + string(token)
 	res.Write([]byte(resBody))
@@ -36,7 +38,6 @@ func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
-
 	token := chi.URLParam(req, "id")
 	if token == "" {
 		http.Error(res, "bad request", http.StatusBadRequest)
@@ -50,7 +51,8 @@ func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
-
-	res.Header().Set("Location", longURL)
+	res.Header().Add("Location", longURL)
+	res.Header()["Date"] = nil
+	res.Header()["Content-Length"] = nil
 	res.WriteHeader(http.StatusTemporaryRedirect)
 }
