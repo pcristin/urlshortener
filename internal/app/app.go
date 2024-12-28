@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -17,13 +18,13 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Printf("Encoding: Provided long URL: %s\r\n", longURL)
+	fmt.Printf("Encoding: Provided long URL: %s\r\n", longURL)
 
 	defer req.Body.Close()
 
 	token := uu.EncodeURL(string(longURL))
 
-	log.Printf("Encoding: Generated token %s for %s\r\n", string(token), longURL)
+	fmt.Printf("Encoding: Generated token %s for %s\r\n", string(token), longURL)
 
 	res.Header().Set("content-type", "text/plain")
 	res.Header()["Date"] = nil
