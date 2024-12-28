@@ -33,7 +33,7 @@ func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 }
 
 func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet || req.Host != "localhost:8080" {
+	if req.Method != http.MethodGet {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}

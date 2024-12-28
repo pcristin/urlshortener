@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -11,13 +12,22 @@ import (
 )
 
 func main() {
+	// Print initial state
+	fmt.Printf("Initial ServerURL: %q\n", config.OptionsFlag.ServerURL)
+
 	config.FlagParse()
+
+	// Print after parsing
+	fmt.Printf("After parsing ServerURL: %q\n", config.OptionsFlag.ServerURL)
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Post("/", app.EncodeURLHandler)
 	r.Get("/{id}", app.DecodeURLHandler)
 
-	if err := http.ListenAndServe("localhost:8080", r); err != nil {
+	fmt.Printf("Running server on ServerURL=%q\n", config.OptionsFlag.ServerURL)
+
+	if err := http.ListenAndServe(config.OptionsFlag.ServerURL, r); err != nil {
 		log.Fatalf("error in ListenAndServe: %v", err)
 	}
 }
