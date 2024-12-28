@@ -11,7 +11,9 @@ type Options struct {
 	BaseURL   string
 }
 
-var OptionsFlag Options
+var OptionsFlag = Options{
+	ServerURL: "localhost:8080",
+}
 
 func FlagParse() {
 	flag.StringVar(&OptionsFlag.ServerURL, "a", OptionsFlag.ServerURL, "address and port to run server")
