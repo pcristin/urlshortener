@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"strings"
 )
 
 type Options struct {
@@ -12,9 +11,7 @@ type Options struct {
 	BaseURL   string
 }
 
-var OptionsFlag = Options{
-	ServerURL: "localhost:8080", // Default value
-}
+var OptionsFlag Options
 
 func FlagParse() {
 	flag.StringVar(&OptionsFlag.ServerURL, "a", OptionsFlag.ServerURL, "address and port to run server")
@@ -22,10 +19,8 @@ func FlagParse() {
 
 	flag.Parse()
 
-	if envServerURL := os.Getenv("SERVER_ADDRESS"); envServerURL != "" {
-		OptionsFlag.ServerURL = cleanServerURL(envServerURL)
-	} else {
-		OptionsFlag.ServerURL = cleanServerURL(OptionsFlag.ServerURL)
+	if valueEnvServerURL, foundEnvServerURL := os.LookupEnv("SERVER_ADDRESS"); foundEnvServerURL && valueEnvServerURL != "" {
+		OptionsFlag.ServerURL = os.Getenv("SERVER_ADDRESS")
 	}
 
 	if envBaseURL := os.Getenv("BASE_URL"); envBaseURL != "" {
@@ -34,11 +29,4 @@ func FlagParse() {
 
 	log.Printf("After parsing - ServerURL: %s\r\n", OptionsFlag.ServerURL)
 	log.Printf("After parsing - BaseURL: %s\r\n", OptionsFlag.BaseURL)
-}
-
-// Removes protocol prefix if present
-func cleanServerURL(url string) string {
-	url = strings.TrimPrefix(url, "http://")
-	url = strings.TrimPrefix(url, "https://")
-	return url
 }
