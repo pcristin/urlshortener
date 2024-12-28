@@ -11,16 +11,14 @@ type Options struct {
 	BaseURL   string
 }
 
-var OptionsFlag = Options{
-	ServerURL: "localhost:8080", // Set default value here
-}
+var OptionsFlag Options
 
 func FlagParse() {
 	// Print before parsing
 	log.Printf("Before parsing - ServerURL: %s\r\n", OptionsFlag.ServerURL)
 	log.Printf("Before parsing - BaseURL: %s\r\n", OptionsFlag.BaseURL)
 
-	flag.StringVar(&OptionsFlag.ServerURL, "a", OptionsFlag.ServerURL, "address and port to run server")
+	flag.StringVar(&OptionsFlag.ServerURL, "a", "localhost:8080", "address and port to run server")
 	flag.StringVar(&OptionsFlag.BaseURL, "b", "", "server url and short url path to redirect")
 
 	flag.Parse()
