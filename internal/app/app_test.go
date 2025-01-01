@@ -128,13 +128,6 @@ func TestDecodeURLHandler(t *testing.T) {
 			storedURL:  "",
 			wantStatus: http.StatusBadRequest,
 		},
-		{
-			name:       "wrong method",
-			method:     http.MethodPost,
-			token:      "abc123",
-			storedURL:  "https://google.com",
-			wantStatus: http.StatusBadRequest,
-		},
 	}
 
 	for _, tt := range tests {

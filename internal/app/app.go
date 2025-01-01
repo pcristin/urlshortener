@@ -50,6 +50,7 @@ func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
+	defer req.Body.Close()
 
 	token := chi.URLParam(req, "id")
 	if token == "" {
@@ -58,7 +59,7 @@ func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	longURL, err := uu.DecodeURL(token, h.storage)
-	if err != nil {
+	if err != nil || longURL == "" {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
