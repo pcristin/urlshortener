@@ -67,5 +67,7 @@ func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	res.Header().Add("Location", longURL)
+	res.Header()["Date"] = nil
+	res.Header()["Content-Length"] = nil
 	res.WriteHeader(http.StatusTemporaryRedirect)
 }

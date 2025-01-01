@@ -6,20 +6,13 @@ import (
 	"os"
 )
 
-// OptionsConfigger defines the interface for configuration
-type OptionsConfigger interface {
-	GetServerURL() string
-	GetBaseURL() string
-	ParseFlags()
-}
-
 type Options struct {
 	serverURL string
 	baseURL   string
 }
 
 // NewOptions creates a new Options instance
-func NewOptions() OptionsConfigger {
+func NewOptions() *Options {
 	return &Options{
 		serverURL: "localhost:8080",
 		baseURL:   "",
