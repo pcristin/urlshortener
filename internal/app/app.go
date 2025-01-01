@@ -25,14 +25,18 @@ func NewHandler(storage storage.URLStorager) HandlerInterface {
 }
 
 func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
-	longURL, err := io.ReadAll(req.Body)
-
-	if req.Method != http.MethodPost || err != nil || !uu.URLCheck(string(longURL)) {
+	if req.Method != http.MethodPost || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 
+	longURL, err := io.ReadAll(req.Body)
 	defer req.Body.Close()
+
+	if err != nil || len(longURL) == 0 || !uu.URLCheck(string(longURL)) {
+		http.Error(res, "bad request: incorrect long URL", http.StatusBadRequest)
+		return
+	}
 
 	token, err := uu.EncodeURL(string(longURL), h.storage)
 	if err != nil {
@@ -40,7 +44,7 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	res.Header().Set("content-type", "text/plain")
+	res.Header().Set("Content-Type", "text/plain")
 	res.WriteHeader(http.StatusCreated)
 	resBody := "http://" + req.Host + "/" + token
 	res.Write([]byte(resBody))
