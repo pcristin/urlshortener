@@ -6,29 +6,50 @@ import (
 	"os"
 )
 
+// OptionsConfigger defines the interface for configuration
+type OptionsConfigger interface {
+	GetServerURL() string
+	GetBaseURL() string
+	ParseFlags()
+}
+
 type Options struct {
-	ServerURL string
-	BaseURL   string
+	serverURL string
+	baseURL   string
 }
 
-var OptionsFlag = Options{
-	ServerURL: "localhost:8080",
+// NewOptions creates a new Options instance
+func NewOptions() OptionsConfigger {
+	return &Options{
+		serverURL: "localhost:8080",
+		baseURL:   "",
+	}
 }
 
-func FlagParse() {
-	flag.StringVar(&OptionsFlag.ServerURL, "a", OptionsFlag.ServerURL, "address and port to run server")
-	flag.StringVar(&OptionsFlag.BaseURL, "b", "", "server url and short url path to redirect")
+// ParseFlags parses command line flags and environment variables
+func (o *Options) ParseFlags() {
+	flag.StringVar(&o.serverURL, "a", o.serverURL, "address and port to run server")
+	flag.StringVar(&o.baseURL, "b", o.baseURL, "server url and short url path to redirect")
 
 	flag.Parse()
 
 	if valueEnvServerURL, foundEnvServerURL := os.LookupEnv("SERVER_ADDRESS"); foundEnvServerURL && valueEnvServerURL != "" {
-		OptionsFlag.ServerURL = os.Getenv("SERVER_ADDRESS")
+		o.serverURL = os.Getenv("SERVER_ADDRESS")
 	}
 
-	if envBaseURL := os.Getenv("BASE_URL"); envBaseURL != "" {
-		OptionsFlag.BaseURL = envBaseURL
+	if baseURL := os.Getenv("BASE_URL"); baseURL != "" {
+		o.baseURL = baseURL
 	}
 
-	log.Printf("After parsing - ServerURL: %s\r\n", OptionsFlag.ServerURL)
-	log.Printf("After parsing - BaseURL: %s\r\n", OptionsFlag.BaseURL)
+	log.Printf("Configuration: ServerURL=%s, BaseURL=%s", o.serverURL, o.baseURL)
+}
+
+// GetServerURL returns the server URL
+func (o *Options) GetServerURL() string {
+	return o.serverURL
+}
+
+// GetBaseURL returns the base URL
+func (o *Options) GetBaseURL() string {
+	return o.baseURL
 }

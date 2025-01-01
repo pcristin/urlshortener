@@ -1,58 +1,68 @@
 package app
 
 import (
-	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/pcristin/urlshortener/internal/storage"
 	uu "github.com/pcristin/urlshortener/internal/urlutils"
 )
 
-func EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
+type HandlerInterface interface {
+	EncodeURLHandler(http.ResponseWriter, *http.Request)
+	DecodeURLHandler(http.ResponseWriter, *http.Request)
+}
+
+type Handler struct {
+	storage storage.URLStorager
+}
+
+func NewHandler(storage storage.URLStorager) HandlerInterface {
+	return &Handler{
+		storage: storage,
+	}
+}
+
+func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
+	defer req.Body.Close()
 
 	if req.Method != http.MethodPost || err != nil || !uu.URLCheck(string(longURL)) {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 
-	fmt.Printf("Encoding: Provided long URL: %s\r\n", longURL)
-
-	defer req.Body.Close()
-
-	token := uu.EncodeURL(string(longURL))
-
-	fmt.Printf("Encoding: Generated token %s for %s\r\n", string(token), longURL)
+	token, err := uu.EncodeURL(string(longURL), h.storage)
+	if err != nil {
+		http.Error(res, "internal error", http.StatusInternalServerError)
+		return
+	}
 
 	res.Header().Set("content-type", "text/plain")
-	res.Header()["Date"] = nil
 	res.WriteHeader(http.StatusCreated)
-	resBody := "http://" + req.Host + "/" + string(token)
+	resBody := "http://" + req.Host + "/" + token
 	res.Write([]byte(resBody))
 }
 
-func DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
+func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
+
 	token := chi.URLParam(req, "id")
 	if token == "" {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("Decoding: Extracted token %s from GET request\r\n", token)
-
-	longURL, err := uu.DecodeURL(token)
+	longURL, err := uu.DecodeURL(token, h.storage)
 	if err != nil {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
+
 	res.Header().Add("Location", longURL)
-	res.Header()["Date"] = nil
-	res.Header()["Content-Length"] = nil
 	res.WriteHeader(http.StatusTemporaryRedirect)
 }

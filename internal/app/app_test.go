@@ -1,152 +1,173 @@
 package app
 
 import (
-	"fmt"
+	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestEncodeURLHandler(t *testing.T) {
-	type reqParams struct {
-		method       string
-		sentData     string
-		expectedCode int
-	}
+// MockStorage is test storage
+type MockStorage struct {
+	urls map[string]string
+}
 
-	tt := []struct {
-		name      string
-		reqParams reqParams
+func NewMockStorage() *MockStorage {
+	return &MockStorage{
+		urls: make(map[string]string),
+	}
+}
+
+func (m *MockStorage) AddURL(token, longURL string) error {
+	m.urls[token] = longURL
+	return nil
+}
+
+func (m *MockStorage) GetURL(token string) (string, error) {
+	if url, ok := m.urls[token]; ok {
+		return url, nil
+	}
+	return "", nil
+}
+
+func TestEncodeURLHandler(t *testing.T) {
+	tests := []struct {
+		name        string
+		method      string
+		url         string
+		body        string
+		contentType string
+		wantStatus  int
 	}{
 		{
-			name: "post wo data",
-			reqParams: reqParams{
-				method:       http.MethodPost,
-				sentData:     "",
-				expectedCode: http.StatusBadRequest,
-			},
+			name:        "valid url",
+			method:      http.MethodPost,
+			url:         "/",
+			body:        "https://google.com",
+			contentType: "text/plain; charset=utf-8",
+			wantStatus:  http.StatusCreated,
 		},
 		{
-			name: "post with data",
-			reqParams: reqParams{
-				method:       http.MethodPost,
-				sentData:     "https://google.com",
-				expectedCode: http.StatusCreated,
-			},
+			name:        "empty url",
+			method:      http.MethodPost,
+			url:         "/",
+			body:        "",
+			contentType: "text/plain; charset=utf-8",
+			wantStatus:  http.StatusBadRequest,
 		},
 		{
-			name: "post with strange data",
-			reqParams: reqParams{
-				method:       http.MethodPost,
-				sentData:     "app",
-				expectedCode: http.StatusBadRequest,
-			},
+			name:        "invalid url",
+			method:      http.MethodPost,
+			url:         "/",
+			body:        "not-a-url",
+			contentType: "text/plain; charset=utf-8",
+			wantStatus:  http.StatusBadRequest,
 		},
 		{
-			name: "get request",
-			reqParams: reqParams{
-				method:       http.MethodGet,
-				expectedCode: http.StatusBadRequest,
-			},
-		},
-		{
-			name: "put request",
-			reqParams: reqParams{
-				method:       http.MethodPut,
-				expectedCode: http.StatusBadRequest,
-			},
+			name:        "wrong method",
+			method:      http.MethodGet,
+			url:         "/",
+			body:        "https://google.com",
+			contentType: "text/plain; charset=utf-8",
+			wantStatus:  http.StatusBadRequest,
 		},
 	}
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			// Init request
-			req := httptest.NewRequest(http.MethodPost, "localhost:8080", strings.NewReader(tc.reqParams.sentData))
-			req.Header.Set("Content-Type", "text/plain; charset=utf-8")
 
-			// Init recorder (response writer)
-			wr := httptest.NewRecorder()
-			EncodeURLHandler(wr, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize mock storage and handler
+			storage := NewMockStorage()
+			handler := NewHandler(storage)
 
-			// Init result
-			res := wr.Result()
+			// Create request
+			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", tt.contentType)
 
-			// Close request connection
-			defer res.Body.Close()
+			// Create response recorder
+			w := httptest.NewRecorder()
 
-			//Test status codes
-			if tc.reqParams.sentData == "" {
-				assert.Equal(t, res.StatusCode, tc.reqParams.expectedCode)
-				return
-			} else {
-				fmt.Printf("POST data (long url): %s\n", tc.reqParams.sentData)
-				assert.Equal(t, tc.reqParams.expectedCode, res.StatusCode)
-				return
+			// Call handler
+			handler.EncodeURLHandler(w, req)
+
+			// Check response
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+
+			if tt.wantStatus == http.StatusCreated {
+				assert.Equal(t, "text/plain", resp.Header.Get("Content-Type"))
 			}
-
 		})
 	}
 }
 
 func TestDecodeURLHandler(t *testing.T) {
-	type reqParams struct {
-		method string
-		// sentHost     string
-		sentPath     string
-		expectedCode int
-	}
-
-	tt := []struct {
-		name      string
-		reqParams reqParams
+	tests := []struct {
+		name       string
+		method     string
+		token      string
+		storedURL  string
+		wantStatus int
 	}{
 		{
-			name: "post method",
-			reqParams: reqParams{
-				method:       http.MethodPost,
-				sentPath:     "/2gr",
-				expectedCode: http.StatusBadRequest,
-			},
+			name:       "existing url",
+			method:     http.MethodGet,
+			token:      "abc123",
+			storedURL:  "https://google.com",
+			wantStatus: http.StatusTemporaryRedirect,
 		},
 		{
-			name: "empty id",
-			reqParams: reqParams{
-				method:       http.MethodGet,
-				sentPath:     "/",
-				expectedCode: http.StatusBadRequest,
-			},
+			name:       "non-existing url",
+			method:     http.MethodGet,
+			token:      "nonexistent",
+			storedURL:  "",
+			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "empty id",
-			reqParams: reqParams{
-				method:       http.MethodGet,
-				sentPath:     "/greg1451",
-				expectedCode: http.StatusBadRequest,
-			},
+			name:       "wrong method",
+			method:     http.MethodPost,
+			token:      "abc123",
+			storedURL:  "https://google.com",
+			wantStatus: http.StatusBadRequest,
 		},
 	}
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			// Init request
-			req := httptest.NewRequest(tc.reqParams.method, "localhost:8080", nil)
-			req.URL.Path = tc.reqParams.sentPath
 
-			// Init recorder (response writer)
-			wr := httptest.NewRecorder()
-			DecodeURLHandler(wr, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize mock storage and handler
+			storage := NewMockStorage()
+			if tt.storedURL != "" {
+				err := storage.AddURL(tt.token, tt.storedURL)
+				require.NoError(t, err)
+			}
 
-			// Init result object
-			res := wr.Result()
+			handler := NewHandler(storage)
 
-			// Closing connection
-			defer res.Body.Close()
+			// Create chi router for URL parameter handling
+			r := chi.NewRouter()
+			r.Get("/{id}", handler.DecodeURLHandler)
 
-			// Test status codes
-			assert.Equal(t, tc.reqParams.expectedCode, res.StatusCode)
-			fmt.Printf("Raw Path value: %v\n", req.URL.Path)
+			// Create request
+			req := httptest.NewRequest(tt.method, "/"+tt.token, nil)
+			w := httptest.NewRecorder()
 
+			// Serve the request
+			r.ServeHTTP(w, req)
+
+			// Check response
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+
+			if tt.wantStatus == http.StatusTemporaryRedirect {
+				assert.Equal(t, tt.storedURL, resp.Header.Get("Location"))
+			}
 		})
 	}
 }

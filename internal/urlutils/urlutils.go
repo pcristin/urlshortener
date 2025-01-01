@@ -1,22 +1,17 @@
 package urlutils
 
 import (
-	"errors"
 	randMath "math/rand/v2"
 	"regexp"
+
+	"github.com/pcristin/urlshortener/internal/storage"
 )
 
-var URLStorage = make(map[string]string)
-
-func DecodeURL(token string) (string, error) {
-	if url, found := URLStorage[token]; found {
-		return url, nil
-	} else {
-		return "", errors.New("haven't found the URL")
-	}
+func DecodeURL(token string, storage storage.URLStorager) (string, error) {
+	return storage.GetURL(token)
 }
 
-func randRange(a int, b int) int {
+func generateRandomNumber(a int, b int) int {
 	return randMath.IntN(b-a) + a
 }
 
@@ -30,12 +25,14 @@ func generateToken(length int) string {
 }
 
 // Encode URL to a range number from 6 to 9 of random characters
-func EncodeURL(url string) string {
-	// Creating the random length (from 6 to including 9) slice of bytes
-	length := randRange(6, 10)
+func EncodeURL(url string, storage storage.URLStorager) (string, error) {
+	length := generateRandomNumber(6, 10)
 	token := generateToken(length)
-	URLStorage[string(token)] = url
-	return string(token)
+	err := storage.AddURL(token, url)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
 // Check the validity of provided URL address
