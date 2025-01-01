@@ -26,16 +26,17 @@ func NewHandler(storage storage.URLStorager) HandlerInterface {
 
 func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	longURL, err := io.ReadAll(req.Body)
-	defer req.Body.Close()
 
 	if req.Method != http.MethodPost || err != nil || !uu.URLCheck(string(longURL)) {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 
+	defer req.Body.Close()
+
 	token, err := uu.EncodeURL(string(longURL), h.storage)
 	if err != nil {
-		http.Error(res, "internal error", http.StatusInternalServerError)
+		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
 
@@ -50,13 +51,14 @@ func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
-	defer req.Body.Close()
 
 	token := chi.URLParam(req, "id")
 	if token == "" {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
+
+	defer req.Body.Close()
 
 	longURL, err := uu.DecodeURL(token, h.storage)
 	if err != nil || longURL == "" {
