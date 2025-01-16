@@ -3,8 +3,8 @@ package app
 import (
 	"bytes"
 	"io"
-	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pcristin/urlshortener/internal/storage"
@@ -32,12 +32,12 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	longURL, err := io.ReadAll(req.Body)
-	log.Printf("Received Long URL: %s", longURL)
-	req.Body = io.NopCloser(bytes.NewBuffer(longURL))
+	longURLBytes, err := io.ReadAll(req.Body)
+	longURL := strings.TrimSpace(string(longURLBytes))
+	req.Body = io.NopCloser(bytes.NewBuffer(longURLBytes))
 	defer req.Body.Close()
 
-	if err != nil || len(longURL) == 0 || !uu.URLCheck(string(longURL)) {
+	if err != nil || len(longURL) == 0 || !uu.URLCheck(longURL) {
 		http.Error(res, "bad request: incorrect long URL", http.StatusBadRequest)
 		return
 	}
