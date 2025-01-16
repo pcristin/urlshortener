@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -32,6 +33,7 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	longURL, err := io.ReadAll(req.Body)
+	log.Printf("Received Long URL: %s", longURL)
 	req.Body = io.NopCloser(bytes.NewBuffer(longURL))
 	defer req.Body.Close()
 
