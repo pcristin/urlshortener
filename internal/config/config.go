@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"log"
 	"os"
 )
 
@@ -33,8 +32,6 @@ func (o *Options) ParseFlags() {
 	if baseURL := os.Getenv("BASE_URL"); baseURL != "" {
 		o.baseURL = baseURL
 	}
-
-	log.Printf("Configuration: ServerURL=%s, BaseURL=%s", o.serverURL, o.baseURL)
 }
 
 // GetServerURL returns the server URL

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 
@@ -31,6 +32,7 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	longURL, err := io.ReadAll(req.Body)
+	req.Body = io.NopCloser(bytes.NewBuffer(longURL))
 	defer req.Body.Close()
 
 	if err != nil || len(longURL) == 0 {
