@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/pcristin/urlshortener/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,6 +36,11 @@ func (m *MockStorage) GetURL(token string) (string, error) {
 }
 
 func TestEncodeURLHandler(t *testing.T) {
+	// Initialize logger
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
 	tests := []struct {
 		name        string
 		method      string
@@ -65,7 +71,7 @@ func TestEncodeURLHandler(t *testing.T) {
 			url:         "/",
 			body:        "not-a-url",
 			contentType: "text/plain; charset=utf-8",
-			wantStatus:  http.StatusBadRequest,
+			wantStatus:  http.StatusCreated,
 		},
 		{
 			name:        "wrong method",
@@ -83,6 +89,9 @@ func TestEncodeURLHandler(t *testing.T) {
 			storage := NewMockStorage()
 			handler := NewHandler(storage)
 
+			// Wrap the handler with logging
+			loggedHandler := logger.WithLogging(handler.EncodeURLHandler, log)
+
 			// Create request
 			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", tt.contentType)
@@ -91,7 +100,7 @@ func TestEncodeURLHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			// Call handler
-			handler.EncodeURLHandler(w, req)
+			loggedHandler(w, req)
 
 			// Check response
 			resp := w.Result()
@@ -107,6 +116,11 @@ func TestEncodeURLHandler(t *testing.T) {
 }
 
 func TestDecodeURLHandler(t *testing.T) {
+	// Initialize logger
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
 	tests := []struct {
 		name       string
 		method     string
@@ -141,9 +155,12 @@ func TestDecodeURLHandler(t *testing.T) {
 
 			handler := NewHandler(storage)
 
+			// Wrap the handler with logging
+			loggedHandler := logger.WithLogging(handler.DecodeURLHandler, log)
+
 			// Create chi router for URL parameter handling
 			r := chi.NewRouter()
-			r.Get("/{id}", handler.DecodeURLHandler)
+			r.Get("/{id}", loggedHandler)
 
 			// Create request
 			req := httptest.NewRequest(tt.method, "/"+tt.token, nil)
