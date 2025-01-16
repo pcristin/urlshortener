@@ -35,7 +35,7 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	req.Body = io.NopCloser(bytes.NewBuffer(longURL))
 	defer req.Body.Close()
 
-	if err != nil || len(longURL) == 0 {
+	if err != nil || len(longURL) == 0 || !uu.URLCheck(string(longURL)) {
 		http.Error(res, "bad request: incorrect long URL", http.StatusBadRequest)
 		return
 	}

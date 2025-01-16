@@ -71,7 +71,7 @@ func TestEncodeURLHandler(t *testing.T) {
 			url:         "/",
 			body:        "not-a-url",
 			contentType: "text/plain; charset=utf-8",
-			wantStatus:  http.StatusCreated,
+			wantStatus:  http.StatusBadRequest,
 		},
 		{
 			name:        "wrong method",

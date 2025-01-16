@@ -46,7 +46,7 @@ func WithLogging(h http.HandlerFunc, log *zap.SugaredLogger) http.HandlerFunc {
 		}
 		h.ServeHTTP(&lw, r)
 
-		var body string = "no body"
+		body := "none"
 		if r.Method == http.MethodPost && r.RequestURI == "/" {
 			bodyBytes, _ := io.ReadAll(r.Body)
 			defer r.Body.Close()
