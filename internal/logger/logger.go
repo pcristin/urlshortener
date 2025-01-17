@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"io"
 	"net/http"
 	"time"
 
@@ -46,19 +45,10 @@ func WithLogging(h http.HandlerFunc, log *zap.SugaredLogger) http.HandlerFunc {
 		}
 		h.ServeHTTP(&lw, r)
 
-		body := "none"
-		if r.Method == http.MethodPost && r.RequestURI == "/" {
-			bodyBytes, _ := io.ReadAll(r.Body)
-			defer r.Body.Close()
-
-			body = string(bodyBytes)
-		}
-
 		duration := time.Since(start)
 		log.Infoln(
 			"uri", r.RequestURI,
 			"method", r.Method,
-			"body", body,
 			"status", responseData.status,
 			"duration", duration,
 			"size", responseData.size,
