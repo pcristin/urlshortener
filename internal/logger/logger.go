@@ -3,7 +3,6 @@ package logger
 import (
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -52,7 +51,7 @@ func WithLogging(h http.HandlerFunc, log *zap.SugaredLogger) http.HandlerFunc {
 			bodyBytes, _ := io.ReadAll(r.Body)
 			defer r.Body.Close()
 
-			body = strings.TrimSpace(string(bodyBytes))
+			body = string(bodyBytes)
 		}
 
 		duration := time.Since(start)
