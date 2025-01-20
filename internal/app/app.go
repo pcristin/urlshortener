@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mailru/easyjson"
+	mod "github.com/pcristin/urlshortener/internal/models"
 	"github.com/pcristin/urlshortener/internal/storage"
 	uu "github.com/pcristin/urlshortener/internal/urlutils"
 )
@@ -12,6 +14,7 @@ import (
 type HandlerInterface interface {
 	EncodeURLHandler(http.ResponseWriter, *http.Request)
 	DecodeURLHandler(http.ResponseWriter, *http.Request)
+	ApiEncodeHandler(http.ResponseWriter, *http.Request)
 }
 
 type Handler struct {
@@ -40,7 +43,7 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 
 	token, err := uu.EncodeURL(string(longURL), h.storage)
 	if err != nil {
-		http.Error(res, "bad request", http.StatusBadRequest)
+		http.Error(res, "bad request: unable to shorten provided url", http.StatusBadRequest)
 		return
 	}
 
@@ -74,4 +77,43 @@ func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	res.Header()["Date"] = nil
 	res.Header()["Content-Length"] = nil
 	res.WriteHeader(http.StatusTemporaryRedirect)
+}
+
+func (h *Handler) ApiEncodeHandler(res http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost || req.Header.Get("Content-Type") != "application/json" {
+		http.Error(res, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	var body mod.Request
+
+	err := easyjson.UnmarshalFromReader(req.Body, &body)
+	defer req.Body.Close()
+
+	if err != nil || len(body.URL) == 0 {
+		http.Error(res, "bad request: incorrect url", http.StatusBadRequest)
+		return
+	}
+
+	// Encode the long URL to a short URL
+	shortURL, err := uu.EncodeURL(body.URL, h.storage)
+	if err != nil {
+		http.Error(res, "bad request: unable to shorten provided url", http.StatusBadRequest)
+		return
+	}
+
+	// Prepare the response payload
+	response := mod.Response{
+		Result: shortURL,
+	}
+
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusCreated)
+
+	response_bytes, err := easyjson.Marshal(response)
+
+	if err != nil {
+		http.Error(res, "internal server error: unable to marshal response", http.StatusInternalServerError)
+	}
+	res.Write(response_bytes)
 }

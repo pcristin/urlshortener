@@ -45,6 +45,7 @@ func main() {
 
 	r.Post("/", logger.WithLogging(handler.EncodeURLHandler, log))
 	r.Get("/{id}", logger.WithLogging(handler.DecodeURLHandler, log))
+	r.Post("/api/shorten", logger.WithLogging(handler.ApiEncodeHandler, log))
 
 	log.Infow(
 		"Running server on",

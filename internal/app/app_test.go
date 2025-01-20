@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mailru/easyjson"
 	"github.com/pcristin/urlshortener/internal/logger"
+	mod "github.com/pcristin/urlshortener/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -177,6 +179,87 @@ func TestDecodeURLHandler(t *testing.T) {
 
 			if tt.wantStatus == http.StatusTemporaryRedirect {
 				assert.Equal(t, tt.storedURL, resp.Header.Get("Location"))
+			}
+		})
+	}
+}
+
+func TestApiEncodeHandler(t *testing.T) {
+	// Initialize logger
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
+	tests := []struct {
+		name               string
+		url                string
+		method             string
+		headersContentType string
+		longURL            string
+		wantStatus         int
+	}{
+		{
+			name:               "good url",
+			url:                "/api/shorten",
+			method:             http.MethodPost,
+			headersContentType: "application/json",
+			longURL:            "https://google.com",
+			wantStatus:         http.StatusCreated,
+		},
+		{
+			name:               "empty long url",
+			url:                "/api/shorten",
+			method:             http.MethodPost,
+			headersContentType: "application/json",
+			longURL:            "",
+			wantStatus:         http.StatusBadRequest,
+		},
+		{
+			name:               "incorrect request headers",
+			url:                "/api/shorten",
+			method:             http.MethodPost,
+			headersContentType: "text/plain",
+			longURL:            "www.google.com",
+			wantStatus:         http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize mock storage and handler
+			storage := NewMockStorage()
+			handler := NewHandler(storage)
+
+			// Wrap the handler with logging
+			loggedHandler := logger.WithLogging(handler.ApiEncodeHandler, log)
+
+			// Create request body in JSON format
+			requestBody := mod.Request{
+				URL: tt.longURL,
+			}
+
+			// Marshal the request body to JSON
+			bodyBytes, err := easyjson.Marshal(requestBody)
+			require.NoError(t, err)
+
+			// Create request
+			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBuffer(bodyBytes))
+			req.Header.Set("Content-Type", tt.headersContentType)
+
+			// Create response recorder
+			w := httptest.NewRecorder()
+
+			// Call handler
+			loggedHandler(w, req)
+
+			// Check response
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+
+			if tt.wantStatus == http.StatusCreated {
+				assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 			}
 		})
 	}
