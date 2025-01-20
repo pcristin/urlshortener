@@ -138,11 +138,18 @@ func TestDecodeURLHandler(t *testing.T) {
 			wantStatus: http.StatusTemporaryRedirect,
 		},
 		{
-			name:       "non-existing url",
+			name:       "non existing url",
 			method:     http.MethodGet,
 			token:      "nonexistent",
 			storedURL:  "",
 			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "testing ptorocol scheme",
+			method:     http.MethodGet,
+			token:      "A8gtZk8",
+			storedURL:  "www.dzen.ru",
+			wantStatus: http.StatusTemporaryRedirect,
 		},
 	}
 
