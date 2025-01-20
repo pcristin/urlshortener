@@ -79,7 +79,7 @@ func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	res.WriteHeader(http.StatusTemporaryRedirect)
 }
 
-func (h *Handler) ApiEncodeHandler(res http.ResponseWriter, req *http.Request) {
+func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost || req.Header.Get("Content-Type") != "application/json" {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
@@ -110,10 +110,10 @@ func (h *Handler) ApiEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Content-Type", "application/json")
 	res.WriteHeader(http.StatusCreated)
 
-	response_bytes, err := easyjson.Marshal(response)
+	responseBytes, err := easyjson.Marshal(response)
 
 	if err != nil {
 		http.Error(res, "internal server error: unable to marshal response", http.StatusInternalServerError)
 	}
-	res.Write(response_bytes)
+	res.Write(responseBytes)
 }
