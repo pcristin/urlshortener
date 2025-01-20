@@ -104,7 +104,7 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 
 	// Prepare the response payload
 	response := mod.Response{
-		Result: shortURL,
+		Result: "http://" + req.Host + "/" + shortURL,
 	}
 
 	res.Header().Set("Content-Type", "application/json")
