@@ -24,3 +24,6 @@ vendor/
 
 # Shell files
 *.sh
+
+# Scripts
+scripts.txt
