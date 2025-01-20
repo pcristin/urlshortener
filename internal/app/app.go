@@ -49,7 +49,7 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 
 	res.Header().Set("Content-Type", "text/plain")
 	res.WriteHeader(http.StatusCreated)
-	resBody := "http://" + req.Host + "/" + token
+	resBody := req.URL.Host + "/" + token
 	res.Write([]byte(resBody))
 }
 
