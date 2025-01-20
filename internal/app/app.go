@@ -14,7 +14,7 @@ import (
 type HandlerInterface interface {
 	EncodeURLHandler(http.ResponseWriter, *http.Request)
 	DecodeURLHandler(http.ResponseWriter, *http.Request)
-	ApiEncodeHandler(http.ResponseWriter, *http.Request)
+	APIEncodeHandler(http.ResponseWriter, *http.Request)
 }
 
 type Handler struct {

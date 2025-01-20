@@ -231,7 +231,7 @@ func TestApiEncodeHandler(t *testing.T) {
 			handler := NewHandler(storage)
 
 			// Wrap the handler with logging
-			loggedHandler := logger.WithLogging(handler.ApiEncodeHandler, log)
+			loggedHandler := logger.WithLogging(handler.APIEncodeHandler, log)
 
 			// Create request body in JSON format
 			requestBody := mod.Request{
