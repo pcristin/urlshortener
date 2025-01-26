@@ -30,3 +30,6 @@ scripts.txt
 
 # Saved data
 saved_data.json
+
+# macOS
+.DS_Store

@@ -36,8 +36,8 @@ func (o *Options) ParseFlags() {
 		o.baseURL = baseURL
 	}
 
-	if valueEnvPathToJSON, foundEnvPathToJSON := os.LookupEnv("PATH_TO_JSON"); foundEnvPathToJSON && valueEnvPathToJSON != "" {
-		o.pathToSavedData = os.Getenv("PATH_TO_JSON")
+	if valueEnvPathToJSON, foundEnvPathToJSON := os.LookupEnv("FILE_STORAGE_PATH"); foundEnvPathToJSON && valueEnvPathToJSON != "" {
+		o.pathToSavedData = os.Getenv("FILE_STORAGE_PATH")
 	}
 }
 
