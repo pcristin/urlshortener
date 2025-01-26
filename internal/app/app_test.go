@@ -2,12 +2,15 @@ package app
 
 import (
 	"bytes"
+	"compress/gzip"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mailru/easyjson"
+	myGzip "github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
 	mod "github.com/pcristin/urlshortener/internal/models"
 	"github.com/stretchr/testify/assert"
@@ -267,6 +270,134 @@ func TestApiEncodeHandler(t *testing.T) {
 
 			if tt.wantStatus == http.StatusCreated {
 				assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+			}
+		})
+	}
+}
+
+func TestCompressionMiddleware(t *testing.T) {
+	// Initialize logger
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
+	// Sample handler to test middleware
+	sampleHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"message":"Hello, World!"}`))
+	}
+
+	// Wrap the sample handler with GzipMiddleware
+	handler := myGzip.GzipMiddleware(sampleHandler)
+
+	tests := []struct {
+		name               string
+		acceptEncoding     string
+		contentEncoding    string
+		contentType        string
+		requestBody        string
+		expectedHeader     string
+		expectedBody       string
+		expectedStatusCode int
+	}{
+		{
+			name:               "Client supports gzip, response should be compressed",
+			acceptEncoding:     "gzip",
+			contentEncoding:    "",
+			contentType:        "application/json",
+			requestBody:        "",
+			expectedHeader:     "gzip",
+			expectedBody:       `{"message":"Hello, World!"}`,
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "Client does not support gzip, response should not be compressed",
+			acceptEncoding:     "",
+			contentEncoding:    "",
+			contentType:        "application/json",
+			requestBody:        "",
+			expectedHeader:     "",
+			expectedBody:       `{"message":"Hello, World!"}`,
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "Client sends gzip compressed request, server should decompress",
+			acceptEncoding:     "",
+			contentEncoding:    "gzip",
+			contentType:        "application/json",
+			requestBody:        `{"message":"Hello, Server!"}`,
+			expectedHeader:     "",
+			expectedBody:       `{"message":"Hello, World!"}`,
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "Unsupported Content-Type, should not compress",
+			acceptEncoding:     "gzip",
+			contentEncoding:    "",
+			contentType:        "application/xml",
+			requestBody:        "",
+			expectedHeader:     "",
+			expectedBody:       `{"message":"Hello, World!"}`,
+			expectedStatusCode: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create request
+			var reqBody io.Reader
+			if tt.contentEncoding == "gzip" {
+				var buf bytes.Buffer
+				gzipWriter := gzip.NewWriter(&buf)
+				_, err := gzipWriter.Write([]byte(tt.requestBody))
+				require.NoError(t, err)
+				gzipWriter.Close()
+				reqBody = &buf
+			} else {
+				reqBody = bytes.NewBufferString(tt.requestBody)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/", reqBody)
+			if tt.acceptEncoding != "" {
+				req.Header.Set("Accept-Encoding", tt.acceptEncoding)
+			}
+			if tt.contentEncoding != "" {
+				req.Header.Set("Content-Encoding", tt.contentEncoding)
+			}
+			req.Header.Set("Content-Type", tt.contentType)
+
+			// Create response recorder
+			rr := httptest.NewRecorder()
+
+			// Serve the request
+			handler(rr, req)
+
+			// Check status code
+			assert.Equal(t, tt.expectedStatusCode, rr.Code)
+
+			// Check Content-Encoding header
+			if tt.expectedHeader != "" {
+				assert.Equal(t, tt.expectedHeader, rr.Header().Get("Content-Encoding"))
+			} else {
+				assert.Empty(t, rr.Header().Get("Content-Encoding"))
+			}
+
+			// Check response body
+			if tt.expectedBody != "" {
+				var responseBody string
+				if tt.expectedHeader == "gzip" {
+					// Decompress response body
+					gzipReader, err := gzip.NewReader(rr.Body)
+					require.NoError(t, err)
+					decompressedBody, err := io.ReadAll(gzipReader)
+					require.NoError(t, err)
+					gzipReader.Close()
+					responseBody = string(decompressedBody)
+				} else {
+					responseBody = rr.Body.String()
+				}
+				assert.Equal(t, tt.expectedBody, responseBody)
 			}
 		})
 	}

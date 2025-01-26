@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/pcristin/urlshortener/internal/app"
 	"github.com/pcristin/urlshortener/internal/config"
+	"github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
 	"github.com/pcristin/urlshortener/internal/storage"
 )
@@ -39,13 +40,13 @@ func main() {
 
 	r := chi.NewRouter()
 
-	// Set up the middlewares: logger and 60s timeout
+	// Set up the middlewares: 60s timeout
 	// r.Use(middleware.Logger)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	r.Post("/", logger.WithLogging(handler.EncodeURLHandler, log))
-	r.Get("/{id}", logger.WithLogging(handler.DecodeURLHandler, log))
-	r.Post("/api/shorten", logger.WithLogging(handler.APIEncodeHandler, log))
+	r.Post("/", logger.WithLogging(gzip.GzipMiddleware(handler.EncodeURLHandler), log))
+	r.Get("/{id}", logger.WithLogging(gzip.GzipMiddleware(handler.DecodeURLHandler), log))
+	r.Post("/api/shorten", logger.WithLogging(gzip.GzipMiddleware(handler.APIEncodeHandler), log))
 
 	log.Infow(
 		"Running server on",
