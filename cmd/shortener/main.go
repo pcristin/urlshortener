@@ -35,6 +35,13 @@ func main() {
 	// Initialize storage
 	urlStorage := storage.NewURLStorage()
 
+	// Load data from file if path is provided
+	if filePath := config.GetPathToSavedData(); filePath != "" {
+		if err := urlStorage.LoadFromFile(filePath); err != nil {
+			log.Warnf("Failed to load data from file: %v", err)
+		}
+	}
+
 	// Initialize handler with storage
 	handler := app.NewHandler(urlStorage)
 

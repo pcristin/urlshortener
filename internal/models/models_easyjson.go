@@ -17,7 +17,89 @@ var (
 	_ easyjson.Marshaler
 )
 
-func easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels(in *jlexer.Lexer, out *Response) {
+func easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels(in *jlexer.Lexer, out *URLStorageNode) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		if in.IsNull() {
+			in.Skip()
+			in.WantComma()
+			continue
+		}
+		switch key {
+		case "uuid":
+			if data := in.UnsafeBytes(); in.Ok() {
+				in.AddError((out.UUID).UnmarshalText(data))
+			}
+		case "short_url":
+			out.ShortURL = string(in.String())
+		case "original_url":
+			out.OriginalURL = string(in.String())
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels(out *jwriter.Writer, in URLStorageNode) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"uuid\":"
+		out.RawString(prefix[1:])
+		out.RawText((in.UUID).MarshalText())
+	}
+	{
+		const prefix string = ",\"short_url\":"
+		out.RawString(prefix)
+		out.String(string(in.ShortURL))
+	}
+	{
+		const prefix string = ",\"original_url\":"
+		out.RawString(prefix)
+		out.String(string(in.OriginalURL))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v URLStorageNode) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v URLStorageNode) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *URLStorageNode) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *URLStorageNode) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels(l, v)
+}
+func easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels1(in *jlexer.Lexer, out *Response) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -48,7 +130,7 @@ func easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels(in *jlexe
 		in.Consumed()
 	}
 }
-func easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels(out *jwriter.Writer, in Response) {
+func easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels1(out *jwriter.Writer, in Response) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -63,27 +145,27 @@ func easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels(out *jwri
 // MarshalJSON supports json.Marshaler interface
 func (v Response) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels(&w, v)
+	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels1(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Response) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels(w, v)
+	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels1(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *Response) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels(&r, v)
+	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels1(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Response) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels(l, v)
+	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels1(l, v)
 }
-func easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels1(in *jlexer.Lexer, out *Request) {
+func easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels2(in *jlexer.Lexer, out *Request) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -114,7 +196,7 @@ func easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels1(in *jlex
 		in.Consumed()
 	}
 }
-func easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels1(out *jwriter.Writer, in Request) {
+func easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels2(out *jwriter.Writer, in Request) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -129,23 +211,23 @@ func easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels1(out *jwr
 // MarshalJSON supports json.Marshaler interface
 func (v Request) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels1(&w, v)
+	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels2(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Request) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels1(w, v)
+	easyjsonD2b7633eEncodeGithubComPcristinUrlshortenerInternalModels2(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *Request) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels1(&r, v)
+	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels2(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Request) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels1(l, v)
+	easyjsonD2b7633eDecodeGithubComPcristinUrlshortenerInternalModels2(l, v)
 }

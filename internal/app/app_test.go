@@ -1,14 +1,19 @@
 package app
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/mailru/easyjson"
 	myGzip "github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
@@ -19,7 +24,8 @@ import (
 
 // MockStorage is test storage
 type MockStorage struct {
-	urls map[string]string
+	urls     map[string]string
+	filepath string
 }
 
 func NewMockStorage() *MockStorage {
@@ -29,6 +35,9 @@ func NewMockStorage() *MockStorage {
 }
 
 func (m *MockStorage) AddURL(token, longURL string) error {
+	if token == "" || longURL == "" {
+		return errors.New("token and URL cannot be empty")
+	}
 	m.urls[token] = longURL
 	return nil
 }
@@ -37,7 +46,61 @@ func (m *MockStorage) GetURL(token string) (string, error) {
 	if url, ok := m.urls[token]; ok {
 		return url, nil
 	}
-	return "", nil
+	return "", errors.New("URL not found")
+}
+
+func (m *MockStorage) SaveToFile() error {
+	if m.filepath == "" {
+		return nil
+	}
+
+	file, err := os.OpenFile(m.filepath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	for shortURL, longURL := range m.urls {
+		node := mod.URLStorageNode{
+			UUID:        uuid.New(),
+			ShortURL:    shortURL,
+			OriginalURL: longURL,
+		}
+		data, err := easyjson.Marshal(&node)
+		if err != nil {
+			return err
+		}
+		if _, err := writer.Write(data); err != nil {
+			return err
+		}
+		if _, err := writer.Write([]byte("\n")); err != nil {
+			return err
+		}
+	}
+
+	return writer.Flush()
+}
+
+func (m *MockStorage) LoadFromFile(filepath string) error {
+	m.filepath = filepath
+
+	file, err := os.OpenFile(filepath, os.O_RDONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var node mod.URLStorageNode
+		if err := easyjson.Unmarshal(scanner.Bytes(), &node); err != nil {
+			return err
+		}
+		m.urls[node.ShortURL] = node.OriginalURL
+	}
+
+	return scanner.Err()
 }
 
 func TestEncodeURLHandler(t *testing.T) {
@@ -398,6 +461,81 @@ func TestCompressionMiddleware(t *testing.T) {
 					responseBody = rr.Body.String()
 				}
 				assert.Equal(t, tt.expectedBody, responseBody)
+			}
+		})
+	}
+}
+
+func TestFileStorage(t *testing.T) {
+	// Create a temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "urlshortener_test_*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir) // Clean up after test
+
+	testFile := filepath.Join(tmpDir, "test_urls.json")
+
+	tests := []struct {
+		name    string
+		urls    map[string]string // map[shortURL]longURL
+		wantErr bool
+	}{
+		{
+			name: "basic save and load",
+			urls: map[string]string{
+				"abc123": "https://google.com",
+				"def456": "https://github.com",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "empty storage",
+			urls:    map[string]string{},
+			wantErr: false,
+		},
+		{
+			name: "multiple urls",
+			urls: map[string]string{
+				"abc123": "https://google.com",
+				"def456": "https://github.com",
+				"ghi789": "https://example.com",
+				"jkl012": "https://test.com",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize storage
+			storage := NewMockStorage()
+
+			// Add URLs to storage
+			for shortURL, longURL := range tt.urls {
+				err := storage.AddURL(shortURL, longURL)
+				require.NoError(t, err)
+			}
+
+			// Save to file
+			storage.filepath = testFile // Set filepath before saving
+			err = storage.SaveToFile()
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			// Create new storage instance
+			newStorage := NewMockStorage()
+
+			// Load from file
+			err = newStorage.LoadFromFile(testFile)
+			require.NoError(t, err)
+
+			// Verify all URLs were loaded correctly
+			for shortURL, longURL := range tt.urls {
+				loaded, err := newStorage.GetURL(shortURL)
+				require.NoError(t, err)
+				assert.Equal(t, longURL, loaded)
 			}
 		})
 	}
