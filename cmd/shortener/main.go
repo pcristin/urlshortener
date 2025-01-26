@@ -26,6 +26,7 @@ func main() {
 	// Initialize configuration and get server address from config
 	config := config.NewOptions()
 	config.ParseFlags()
+
 	serverURL := config.GetServerURL()
 	if serverURL == "" {
 		//log.Fatalf("server address can not be empty!")
@@ -48,7 +49,6 @@ func main() {
 	r := chi.NewRouter()
 
 	// Set up the middlewares: 60s timeout
-	// r.Use(middleware.Logger)
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.Post("/", logger.WithLogging(gzip.GzipMiddleware(handler.EncodeURLHandler), log))

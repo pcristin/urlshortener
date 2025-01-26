@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"os"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	"github.com/mailru/easyjson"
@@ -26,7 +27,8 @@ type URLStorage struct {
 // InitStorage initializes the URL storage
 func NewURLStorage() URLStorager {
 	return &URLStorage{
-		Storage: make(map[string]models.URLStorageNode),
+		Storage:  make(map[string]models.URLStorageNode),
+		filepath: "", // Will be set via LoadFromFile
 	}
 }
 
@@ -42,8 +44,12 @@ func (us *URLStorage) AddURL(token, longURL string) error {
 		OriginalURL: longURL,
 	}
 
-	// Save to file after each addition
-	return us.SaveToFile()
+	// Save immediately after adding
+	if err := us.SaveToFile(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // GetURL retrieves a URL from storage
@@ -60,7 +66,13 @@ func (us *URLStorage) SaveToFile() error {
 		return nil
 	}
 
-	file, err := os.OpenFile(us.filepath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(us.filepath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	file, err := os.OpenFile(us.filepath, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
