@@ -28,7 +28,7 @@ func NewHandler(storage storage.URLStorager) HandlerInterface {
 }
 
 func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost || req.Header.Get("Content-Type") != "text/plain; charset=utf-8" {
+	if req.Method != http.MethodPost {
 		http.Error(res, "bad request", http.StatusBadRequest)
 		return
 	}
