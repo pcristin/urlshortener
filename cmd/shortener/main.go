@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"time"
 
@@ -9,34 +8,57 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/pcristin/urlshortener/internal/app"
 	"github.com/pcristin/urlshortener/internal/config"
+	"github.com/pcristin/urlshortener/internal/gzip"
+	"github.com/pcristin/urlshortener/internal/logger"
 	"github.com/pcristin/urlshortener/internal/storage"
 )
 
 func main() {
+	// Initialize logger
+	log, err := logger.Initialize()
+
+	if err != nil {
+		panic("could not initialize logger")
+	}
+
+	defer log.Sync()
+
 	// Initialize configuration and get server address from config
 	config := config.NewOptions()
 	config.ParseFlags()
+
 	serverURL := config.GetServerURL()
 	if serverURL == "" {
-		log.Fatalf("server address can not be empty!")
+		//log.Fatalf("server address can not be empty!")
+		log.Fatal("server address can not be empty!")
 	}
 
 	// Initialize storage
 	urlStorage := storage.NewURLStorage()
+
+	// Load data from file if path is provided
+	if filePath := config.GetPathToSavedData(); filePath != "" {
+		if err := urlStorage.LoadFromFile(filePath); err != nil {
+			log.Warnf("Failed to load data from file: %v", err)
+		}
+	}
 
 	// Initialize handler with storage
 	handler := app.NewHandler(urlStorage)
 
 	r := chi.NewRouter()
 
-	// Set up the middlewares: logger and 60s timeout
-	r.Use(middleware.Logger)
+	// Set up the middlewares: 60s timeout
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	r.Post("/", handler.EncodeURLHandler)
-	r.Get("/{id}", handler.DecodeURLHandler)
+	r.Post("/", logger.WithLogging(gzip.GzipMiddleware(handler.EncodeURLHandler), log))
+	r.Get("/{id}", logger.WithLogging(gzip.GzipMiddleware(handler.DecodeURLHandler), log))
+	r.Post("/api/shorten", logger.WithLogging(gzip.GzipMiddleware(handler.APIEncodeHandler), log))
 
-	log.Printf("Running server on %s\n", serverURL)
+	log.Infow(
+		"Running server on",
+		"address", serverURL,
+	)
 
 	if err := http.ListenAndServe(serverURL, r); err != nil {
 		log.Fatalf("error in ListenAndServe %v", err)
