@@ -36,7 +36,7 @@ func main() {
 
 	databaseDSN := config.GetDatabaseDSN()
 	if databaseDSN == "" {
-		log.Fatal("database address can not be empty")
+		log.Warnf("database address can not be empty")
 	}
 
 	// Initialize dbManager
