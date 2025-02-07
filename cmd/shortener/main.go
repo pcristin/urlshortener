@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/pcristin/urlshortener/internal/app"
 	"github.com/pcristin/urlshortener/internal/config"
+	"github.com/pcristin/urlshortener/internal/database"
 	"github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
 	"github.com/pcristin/urlshortener/internal/storage"
@@ -29,9 +31,23 @@ func main() {
 
 	serverURL := config.GetServerURL()
 	if serverURL == "" {
-		//log.Fatalf("server address can not be empty!")
 		log.Fatal("server address can not be empty!")
 	}
+
+	databaseDSN := config.GetDatabaseDSN()
+	if databaseDSN == "" {
+		log.Fatal("database address can not be empty")
+	}
+
+	// Initialize dbManager
+	dbManager, err := database.NewDatabaseManager(databaseDSN)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Initialize db context
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
 	// Initialize storage
 	urlStorage := storage.NewURLStorage()
@@ -44,7 +60,7 @@ func main() {
 	}
 
 	// Initialize handler with storage
-	handler := app.NewHandler(urlStorage)
+	handler := app.NewHandler(urlStorage, dbManager, ctx)
 
 	r := chi.NewRouter()
 
@@ -54,6 +70,7 @@ func main() {
 	r.Post("/", logger.WithLogging(gzip.GzipMiddleware(handler.EncodeURLHandler), log))
 	r.Get("/{id}", logger.WithLogging(gzip.GzipMiddleware(handler.DecodeURLHandler), log))
 	r.Post("/api/shorten", logger.WithLogging(gzip.GzipMiddleware(handler.APIEncodeHandler), log))
+	r.Get("/ping", logger.WithLogging(gzip.GzipMiddleware(handler.PingHandler), log))
 
 	log.Infow(
 		"Running server on",

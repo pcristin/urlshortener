@@ -1,11 +1,13 @@
 package app
 
 import (
+	"context"
 	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mailru/easyjson"
+	"github.com/pcristin/urlshortener/internal/database"
 	mod "github.com/pcristin/urlshortener/internal/models"
 	"github.com/pcristin/urlshortener/internal/storage"
 	uu "github.com/pcristin/urlshortener/internal/urlutils"
@@ -15,15 +17,20 @@ type HandlerInterface interface {
 	EncodeURLHandler(http.ResponseWriter, *http.Request)
 	DecodeURLHandler(http.ResponseWriter, *http.Request)
 	APIEncodeHandler(http.ResponseWriter, *http.Request)
+	PingHandler(http.ResponseWriter, *http.Request)
 }
 
 type Handler struct {
-	storage storage.URLStorager
+	storage         storage.URLStorager
+	databaseManager database.DatabaseManagerInterface
+	context         context.Context
 }
 
-func NewHandler(storage storage.URLStorager) HandlerInterface {
+func NewHandler(storage storage.URLStorager, dbManager database.DatabaseManagerInterface, context context.Context) HandlerInterface {
 	return &Handler{
-		storage: storage,
+		storage:         storage,
+		databaseManager: dbManager,
+		context:         context,
 	}
 }
 
@@ -116,4 +123,16 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "internal server error: unable to marshal response", http.StatusInternalServerError)
 	}
 	res.Write(responseBytes)
+}
+
+func (h *Handler) PingHandler(res http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(res, "bad request", http.StatusBadRequest)
+	}
+
+	if err := h.databaseManager.Ping(h.context); err != nil {
+		http.Error(res, "internal server error", http.StatusInternalServerError)
+	}
+
+	res.WriteHeader(http.StatusOK)
 }

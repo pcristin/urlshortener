@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -103,6 +105,25 @@ func (m *MockStorage) LoadFromFile(filepath string) error {
 	return scanner.Err()
 }
 
+type MockDatabaseManager struct {
+	shouldError bool
+}
+
+func NewMockDatabaseManager() *MockDatabaseManager {
+	return &MockDatabaseManager{
+		shouldError: false,
+	}
+}
+
+func (m *MockDatabaseManager) Ping(ctx context.Context) error {
+	if m.shouldError {
+		return fmt.Errorf("mock database error")
+	}
+	return nil
+}
+
+func (m *MockDatabaseManager) Close() {}
+
 func TestEncodeURLHandler(t *testing.T) {
 	// Initialize logger
 	log, err := logger.Initialize()
@@ -153,10 +174,11 @@ func TestEncodeURLHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Initialize mock storage and handler
 			storage := NewMockStorage()
-			handler := NewHandler(storage)
+			dbManager := NewMockDatabaseManager()
+			ctx := context.Background()
 
+			handler := NewHandler(storage, dbManager, ctx)
 			// Wrap the handler with logging
 			loggedHandler := logger.WithLogging(handler.EncodeURLHandler, log)
 
@@ -221,14 +243,11 @@ func TestDecodeURLHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Initialize mock storage and handler
 			storage := NewMockStorage()
-			if tt.storedURL != "" {
-				err := storage.AddURL(tt.token, tt.storedURL)
-				require.NoError(t, err)
-			}
+			dbManager := NewMockDatabaseManager()
+			ctx := context.Background()
 
-			handler := NewHandler(storage)
+			handler := NewHandler(storage, dbManager, ctx)
 
 			// Wrap the handler with logging
 			loggedHandler := logger.WithLogging(handler.DecodeURLHandler, log)
@@ -299,10 +318,11 @@ func TestApiEncodeHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Initialize mock storage and handler
 			storage := NewMockStorage()
-			handler := NewHandler(storage)
+			dbManager := NewMockDatabaseManager()
+			ctx := context.Background()
 
+			handler := NewHandler(storage, dbManager, ctx)
 			// Wrap the handler with logging
 			loggedHandler := logger.WithLogging(handler.APIEncodeHandler, log)
 
@@ -537,6 +557,66 @@ func TestFileStorage(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, longURL, loaded)
 			}
+		})
+	}
+}
+
+func TestPingHandler(t *testing.T) {
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
+	tests := []struct {
+		name       string
+		method     string
+		dbError    bool
+		wantStatus int
+	}{
+		{
+			name:       "successful ping",
+			method:     http.MethodGet,
+			dbError:    false,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "database error",
+			method:     http.MethodGet,
+			dbError:    true,
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "wrong method",
+			method:     http.MethodPost,
+			dbError:    false,
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize mocks and handler
+			storage := NewMockStorage()
+			dbManager := NewMockDatabaseManager()
+			dbManager.shouldError = tt.dbError
+			ctx := context.Background()
+
+			handler := NewHandler(storage, dbManager, ctx)
+
+			// Wrap the handler with logging
+			loggedHandler := logger.WithLogging(handler.PingHandler, log)
+
+			// Create request
+			req := httptest.NewRequest(tt.method, "/ping", nil)
+			w := httptest.NewRecorder()
+
+			// Call handler
+			loggedHandler(w, req)
+
+			// Check response
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 		})
 	}
 }
