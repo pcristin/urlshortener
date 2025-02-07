@@ -233,19 +233,33 @@ func TestDecodeURLHandler(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "testing ptorocol scheme",
+			name:       "testing protocol scheme",
 			method:     http.MethodGet,
 			token:      "A8gtZk8",
 			storedURL:  "www.dzen.ru",
 			wantStatus: http.StatusTemporaryRedirect,
 		},
+		{
+			name:       "wrong method",
+			method:     http.MethodPost,
+			token:      "abc123",
+			storedURL:  "https://google.com",
+			wantStatus: http.StatusMethodNotAllowed,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Initialize storage and populate it
 			storage := NewMockStorage()
 			dbManager := NewMockDatabaseManager()
 			ctx := context.Background()
+
+			// Pre-populate storage with test data if storedURL is not empty
+			if tt.storedURL != "" {
+				err := storage.AddURL(tt.token, tt.storedURL)
+				require.NoError(t, err, "Failed to populate storage")
+			}
 
 			handler := NewHandler(storage, dbManager, ctx)
 
@@ -267,10 +281,15 @@ func TestDecodeURLHandler(t *testing.T) {
 			resp := w.Result()
 			defer resp.Body.Close()
 
-			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+			assert.Equal(t, tt.wantStatus, resp.StatusCode,
+				"Expected status %d but got %d for test %s",
+				tt.wantStatus, resp.StatusCode, tt.name)
 
 			if tt.wantStatus == http.StatusTemporaryRedirect {
-				assert.Equal(t, tt.storedURL, resp.Header.Get("Location"))
+				location := resp.Header.Get("Location")
+				assert.Equal(t, tt.storedURL, location,
+					"Expected location %s but got %s for test %s",
+					tt.storedURL, location, tt.name)
 			}
 		})
 	}
