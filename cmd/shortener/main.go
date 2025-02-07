@@ -70,7 +70,7 @@ func main() {
 	r.Post("/", logger.WithLogging(gzip.GzipMiddleware(handler.EncodeURLHandler), log))
 	r.Get("/{id}", logger.WithLogging(gzip.GzipMiddleware(handler.DecodeURLHandler), log))
 	r.Post("/api/shorten", logger.WithLogging(gzip.GzipMiddleware(handler.APIEncodeHandler), log))
-	r.Get("/ping", logger.WithLogging(gzip.GzipMiddleware(handler.PingHandler), log))
+	r.Get("/ping", logger.WithLogging(handler.PingHandler, log))
 
 	log.Infow(
 		"Running server on",
