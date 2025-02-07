@@ -133,6 +133,7 @@ func (h *Handler) PingHandler(res http.ResponseWriter, req *http.Request) {
 	if err := h.databaseManager.Ping(h.context); err != nil {
 		http.Error(res, "internal server error", http.StatusInternalServerError)
 	}
+	defer h.databaseManager.Close()
 
 	res.WriteHeader(http.StatusOK)
 }
