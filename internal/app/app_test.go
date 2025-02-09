@@ -358,7 +358,7 @@ func TestApiEncodeHandler(t *testing.T) {
 
 			// Create request body in JSON format
 			requestBody := mod.Request{
-				OriginalURL: tt.longURL,
+				URL: tt.longURL,
 			}
 
 			// Marshal the request body to JSON
@@ -383,6 +383,12 @@ func TestApiEncodeHandler(t *testing.T) {
 
 			if tt.wantStatus == http.StatusCreated {
 				assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+				// Verify response structure
+				var response mod.Response
+				err = easyjson.UnmarshalFromReader(resp.Body, &response)
+				require.NoError(t, err)
+				assert.Contains(t, response.Result, "http://")
 			}
 		})
 	}

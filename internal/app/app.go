@@ -91,17 +91,16 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	var body mod.Request
-
 	err := easyjson.UnmarshalFromReader(req.Body, &body)
 	defer req.Body.Close()
 
-	if err != nil || len(body.OriginalURL) == 0 {
+	if err != nil || len(body.URL) == 0 {
 		http.Error(res, "bad request: incorrect url", http.StatusBadRequest)
 		return
 	}
 
 	// Encode the long URL to a short URL
-	shortURL, err := uu.EncodeURL(body.OriginalURL, h.storage)
+	shortURL, err := uu.EncodeURL(body.URL, h.storage)
 	if err != nil {
 		http.Error(res, "bad request: unable to shorten provided url", http.StatusBadRequest)
 		return
@@ -109,15 +108,13 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 
 	// Prepare the response payload
 	response := mod.Response{
-		CorrelationID: body.CorrelationID,
-		ShortURL:      "http://" + req.Host + "/" + shortURL,
+		Result: "http://" + req.Host + "/" + shortURL,
 	}
 
 	res.Header().Set("Content-Type", "application/json")
 	res.WriteHeader(http.StatusCreated)
 
 	responseBytes, err := easyjson.Marshal(response)
-
 	if err != nil {
 		http.Error(res, "internal server error: unable to marshal response", http.StatusInternalServerError)
 	}
@@ -169,7 +166,7 @@ func (h *Handler) APIEncodeBatchHandler(res http.ResponseWriter, req *http.Reque
 	for _, item := range batchRequests {
 		token := uu.GenerateToken()
 		urlBatch[token] = item.OriginalURL
-		responses = append(responses, mod.Response{
+		responses = append(responses, mod.BatchResponseItem{
 			CorrelationID: item.CorrelationID,
 			ShortURL:      "http://" + req.Host + "/" + token,
 		})
