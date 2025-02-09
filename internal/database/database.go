@@ -24,6 +24,21 @@ func NewDatabaseManager(databaseDSN string) (DatabaseManagerInterface, error) {
 		return nil, fmt.Errorf("unable to create connection pool: %v", err)
 	}
 
+	// Create the database table if it doesn't exist
+	ctx := context.Background()
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS urls (
+			id SERIAL PRIMARY KEY,
+			token VARCHAR(10) NOT NULL UNIQUE,
+			original_url TEXT NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("unable to create table: %v", err)
+	}
+
 	return &DatabaseManager{
 		pool: pool,
 	}, nil
