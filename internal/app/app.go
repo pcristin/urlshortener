@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mailru/easyjson"
-	"github.com/pcristin/urlshortener/internal/database"
 	mod "github.com/pcristin/urlshortener/internal/models"
 	"github.com/pcristin/urlshortener/internal/storage"
 	uu "github.com/pcristin/urlshortener/internal/urlutils"
@@ -21,16 +20,14 @@ type HandlerInterface interface {
 }
 
 type Handler struct {
-	storage         storage.URLStorager
-	databaseManager database.DatabaseManagerInterface
-	context         context.Context
+	storage storage.URLStorager
+	context context.Context
 }
 
-func NewHandler(storage storage.URLStorager, dbManager database.DatabaseManagerInterface, context context.Context) HandlerInterface {
+func NewHandler(storage storage.URLStorager, context context.Context) HandlerInterface {
 	return &Handler{
-		storage:         storage,
-		databaseManager: dbManager,
-		context:         context,
+		storage: storage,
+		context: context,
 	}
 }
 
@@ -128,12 +125,18 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 func (h *Handler) PingHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(res, "bad request", http.StatusBadRequest)
+		return
+	}
+	storage, ok := h.storage.(*storage.URLStorage)
+	if !ok || storage.GetStorageType() != 2 || storage.GetDBPool() == nil {
+		http.Error(res, "database not configured", http.StatusInternalServerError)
+		return
 	}
 
-	if err := h.databaseManager.Ping(h.context); err != nil {
+	if err := storage.GetDBPool().Ping(h.context); err != nil {
 		http.Error(res, "internal server error", http.StatusInternalServerError)
+		return
 	}
-	defer h.databaseManager.Close()
 
 	res.WriteHeader(http.StatusOK)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pcristin/urlshortener/internal/app"
 	"github.com/pcristin/urlshortener/internal/config"
 	"github.com/pcristin/urlshortener/internal/database"
@@ -34,33 +35,34 @@ func main() {
 		log.Fatal("server address can not be empty!")
 	}
 
-	databaseDSN := config.GetDatabaseDSN()
-	if databaseDSN == "" {
-		log.Warnf("database address can not be empty")
+	// Determine storage type based on config
+	var storageType storage.StorageType
+	var dbPool *pgxpool.Pool
+	var filePath string
+
+	if databaseDSN := config.GetDatabaseDSN(); databaseDSN != "" {
+		dbManager, err := database.NewDatabaseManager(databaseDSN)
+		if err != nil {
+			log.Warnf("Failed to connect to database: %v", err)
+		} else {
+			storageType = storage.DatabaseStorage
+			dbPool = dbManager.GetPool()
+		}
+	} else if filePath = config.GetPathToSavedData(); filePath != "" {
+		storageType = storage.FileStorage
+	} else {
+		storageType = storage.MemoryStorage
 	}
 
-	// Initialize dbManager
-	dbManager, err := database.NewDatabaseManager(databaseDSN)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// Initialize storage with determined type
+	urlStorage := storage.NewURLStorage(storageType, filePath, dbPool)
 
 	// Initialize db context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Initialize storage
-	urlStorage := storage.NewURLStorage()
-
-	// Load data from file if path is provided
-	if filePath := config.GetPathToSavedData(); filePath != "" {
-		if err := urlStorage.LoadFromFile(filePath); err != nil {
-			log.Warnf("Failed to load data from file: %v", err)
-		}
-	}
-
 	// Initialize handler with storage
-	handler := app.NewHandler(urlStorage, dbManager, ctx)
+	handler := app.NewHandler(urlStorage, ctx)
 
 	r := chi.NewRouter()
 

@@ -6,7 +6,6 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,23 +15,34 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mailru/easyjson"
 	myGzip "github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
 	mod "github.com/pcristin/urlshortener/internal/models"
+	"github.com/pcristin/urlshortener/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// MockStorage is test storage
+const (
+	MemoryStorage   = storage.StorageType(0)
+	FileStorage     = storage.StorageType(1)
+	DatabaseStorage = storage.StorageType(2)
+)
+
+// MockStorage implements URLStorager interface
 type MockStorage struct {
-	urls     map[string]string
-	filepath string
+	urls        map[string]string
+	filepath    string
+	storageType storage.StorageType
+	dbPool      *pgxpool.Pool
 }
 
-func NewMockStorage() *MockStorage {
+func NewMockStorage(storageType storage.StorageType) *MockStorage {
 	return &MockStorage{
-		urls: make(map[string]string),
+		urls:        make(map[string]string),
+		storageType: storageType,
 	}
 }
 
@@ -105,27 +115,29 @@ func (m *MockStorage) LoadFromFile(filepath string) error {
 	return scanner.Err()
 }
 
-type MockDatabaseManager struct {
-	shouldError bool
+func (m *MockStorage) SetDBPool(pool *pgxpool.Pool) {
+	m.dbPool = pool
 }
 
-func NewMockDatabaseManager() *MockDatabaseManager {
-	return &MockDatabaseManager{
-		shouldError: false,
-	}
+func (m *MockStorage) GetStorageType() storage.StorageType {
+	return m.storageType
 }
 
-func (m *MockDatabaseManager) Ping(ctx context.Context) error {
-	if m.shouldError {
-		return fmt.Errorf("mock database error")
+func (m *MockStorage) GetDBPool() *pgxpool.Pool {
+	if m.storageType == DatabaseStorage {
+		// For testing, just return the stored pool
+		if m.dbPool == nil {
+			// Create a minimal working mock pool
+			config, _ := pgxpool.ParseConfig("")
+			pool, _ := pgxpool.NewWithConfig(context.Background(), config)
+			m.dbPool = pool
+		}
+		return m.dbPool
 	}
 	return nil
 }
 
-func (m *MockDatabaseManager) Close() {}
-
 func TestEncodeURLHandler(t *testing.T) {
-	// Initialize logger
 	log, err := logger.Initialize()
 	require.NoError(t, err)
 	defer log.Sync()
@@ -174,30 +186,22 @@ func TestEncodeURLHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			storage := NewMockStorage()
-			dbManager := NewMockDatabaseManager()
+			storage := NewMockStorage(storage.MemoryStorage)
 			ctx := context.Background()
 
-			handler := NewHandler(storage, dbManager, ctx)
-			// Wrap the handler with logging
+			handler := NewHandler(storage, ctx)
 			loggedHandler := logger.WithLogging(handler.EncodeURLHandler, log)
 
-			// Create request
 			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", tt.contentType)
-
-			// Create response recorder
 			w := httptest.NewRecorder()
 
-			// Call handler
 			loggedHandler(w, req)
 
-			// Check response
 			resp := w.Result()
 			defer resp.Body.Close()
 
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
-
 			if tt.wantStatus == http.StatusCreated {
 				assert.Equal(t, "text/plain", resp.Header.Get("Content-Type"))
 			}
@@ -251,9 +255,7 @@ func TestDecodeURLHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Initialize storage and populate it
-			storage := NewMockStorage()
-			dbManager := NewMockDatabaseManager()
-			ctx := context.Background()
+			storage := NewMockStorage(storage.MemoryStorage)
 
 			// Pre-populate storage with test data if storedURL is not empty
 			if tt.storedURL != "" {
@@ -261,7 +263,7 @@ func TestDecodeURLHandler(t *testing.T) {
 				require.NoError(t, err, "Failed to populate storage")
 			}
 
-			handler := NewHandler(storage, dbManager, ctx)
+			handler := NewHandler(storage, context.Background())
 
 			// Wrap the handler with logging
 			loggedHandler := logger.WithLogging(handler.DecodeURLHandler, log)
@@ -337,11 +339,10 @@ func TestApiEncodeHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			storage := NewMockStorage()
-			dbManager := NewMockDatabaseManager()
+			storage := NewMockStorage(storage.MemoryStorage)
 			ctx := context.Background()
 
-			handler := NewHandler(storage, dbManager, ctx)
+			handler := NewHandler(storage, ctx)
 			// Wrap the handler with logging
 			loggedHandler := logger.WithLogging(handler.APIEncodeHandler, log)
 
@@ -546,7 +547,7 @@ func TestFileStorage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Initialize storage
-			storage := NewMockStorage()
+			storage := NewMockStorage(storage.MemoryStorage)
 
 			// Add URLs to storage
 			for shortURL, longURL := range tt.urls {
@@ -564,7 +565,7 @@ func TestFileStorage(t *testing.T) {
 			require.NoError(t, err)
 
 			// Create new storage instance
-			newStorage := NewMockStorage()
+			newStorage := NewMockStorage(MemoryStorage)
 
 			// Load from file
 			err = newStorage.LoadFromFile(testFile)
@@ -588,50 +589,39 @@ func TestPingHandler(t *testing.T) {
 	tests := []struct {
 		name       string
 		method     string
-		dbError    bool
 		wantStatus int
 	}{
 		{
-			name:       "successful ping",
+			name:       "no db configured",
 			method:     http.MethodGet,
-			dbError:    false,
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "database error",
-			method:     http.MethodGet,
-			dbError:    true,
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
 			name:       "wrong method",
 			method:     http.MethodPost,
-			dbError:    false,
 			wantStatus: http.StatusBadRequest,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Initialize mocks and handler
-			storage := NewMockStorage()
-			dbManager := NewMockDatabaseManager()
-			dbManager.shouldError = tt.dbError
+			var storage *MockStorage
+			if tt.name == "successful ping with db" {
+				storage = NewMockStorage(DatabaseStorage)
+				storage.SetDBPool(&pgxpool.Pool{}) // Mock pool
+			} else {
+				storage = NewMockStorage(MemoryStorage)
+			}
+
 			ctx := context.Background()
-
-			handler := NewHandler(storage, dbManager, ctx)
-
-			// Wrap the handler with logging
+			handler := NewHandler(storage, ctx)
 			loggedHandler := logger.WithLogging(handler.PingHandler, log)
 
-			// Create request
 			req := httptest.NewRequest(tt.method, "/ping", nil)
 			w := httptest.NewRecorder()
 
-			// Call handler
 			loggedHandler(w, req)
 
-			// Check response
 			resp := w.Result()
 			defer resp.Body.Close()
 

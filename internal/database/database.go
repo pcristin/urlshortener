@@ -10,6 +10,7 @@ import (
 type DatabaseManagerInterface interface {
 	Ping(ctx context.Context) error
 	Close()
+	GetPool() *pgxpool.Pool
 }
 
 type DatabaseManager struct {
@@ -38,4 +39,8 @@ func (dm *DatabaseManager) Close() {
 	if dm.pool != nil {
 		dm.pool.Close()
 	}
+}
+
+func (dm *DatabaseManager) GetPool() *pgxpool.Pool {
+	return dm.pool
 }
