@@ -186,7 +186,7 @@ func TestEncodeURLHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			storage := NewMockStorage(storage.MemoryStorage)
+			storage := NewMockStorage(storage.MemoryStorageType)
 			ctx := context.Background()
 
 			handler := NewHandler(storage, ctx)
@@ -255,7 +255,7 @@ func TestDecodeURLHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Initialize storage and populate it
-			storage := NewMockStorage(storage.MemoryStorage)
+			storage := NewMockStorage(storage.MemoryStorageType)
 
 			// Pre-populate storage with test data if storedURL is not empty
 			if tt.storedURL != "" {
@@ -339,7 +339,7 @@ func TestApiEncodeHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			storage := NewMockStorage(storage.MemoryStorage)
+			storage := NewMockStorage(storage.MemoryStorageType)
 			ctx := context.Background()
 
 			handler := NewHandler(storage, ctx)
@@ -547,7 +547,7 @@ func TestFileStorage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Initialize storage
-			storage := NewMockStorage(storage.MemoryStorage)
+			storage := NewMockStorage(storage.MemoryStorageType)
 
 			// Add URLs to storage
 			for shortURL, longURL := range tt.urls {

@@ -45,13 +45,13 @@ func main() {
 		if err != nil {
 			log.Warnf("Failed to connect to database: %v", err)
 		} else {
-			storageType = storage.DatabaseStorage
+			storageType = storage.DatabaseStorageType
 			dbPool = dbManager.GetPool()
 		}
 	} else if filePath = config.GetPathToSavedData(); filePath != "" {
-		storageType = storage.FileStorage
+		storageType = storage.FileStorageType
 	} else {
-		storageType = storage.MemoryStorage
+		storageType = storage.MemoryStorageType
 	}
 
 	// Initialize storage with determined type

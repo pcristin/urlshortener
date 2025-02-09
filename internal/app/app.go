@@ -31,6 +31,7 @@ func NewHandler(storage storage.URLStorager, context context.Context) HandlerInt
 	}
 }
 
+// Handler to encode URL with plain text and without compressing the data
 func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(res, "bad request", http.StatusBadRequest)
@@ -57,6 +58,7 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	res.Write([]byte(resBody))
 }
 
+// Handler to decode encoded long URL
 func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(res, "bad request", http.StatusBadRequest)
@@ -83,6 +85,7 @@ func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	res.WriteHeader(http.StatusTemporaryRedirect)
 }
 
+// Handler to encode the url with compressed data
 func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost || req.Header.Get("Content-Type") != "application/json" {
 		http.Error(res, "bad request", http.StatusBadRequest)
@@ -122,6 +125,7 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	res.Write(responseBytes)
 }
 
+// Handler to check the connectivity to the database
 func (h *Handler) PingHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(res, "bad request", http.StatusBadRequest)

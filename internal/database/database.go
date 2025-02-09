@@ -56,6 +56,7 @@ func (dm *DatabaseManager) Close() {
 	}
 }
 
+// GetPool gets pool from DatabaseManager
 func (dm *DatabaseManager) GetPool() *pgxpool.Pool {
 	return dm.pool
 }

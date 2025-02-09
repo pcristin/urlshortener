@@ -13,25 +13,6 @@ import (
 	"github.com/pcristin/urlshortener/internal/models"
 )
 
-type StorageType int
-
-const (
-	MemoryStorage StorageType = iota
-	FileStorage
-	DatabaseStorage
-)
-
-// URLStorager defines the interface for URL storage operations
-type URLStorager interface {
-	AddURL(token, longURL string) error
-	GetURL(token string) (string, error)
-	SaveToFile() error
-	LoadFromFile(filepath string) error
-	SetDBPool(*pgxpool.Pool)
-	GetStorageType() StorageType
-	GetDBPool() *pgxpool.Pool
-}
-
 type URLStorage struct {
 	storageType StorageType
 	memStorage  map[string]models.URLStorageNode
@@ -39,17 +20,20 @@ type URLStorage struct {
 	dbPool      *pgxpool.Pool
 }
 
-// InitStorage initializes the URL storage
+// NewURLStorage creates a new storage instance based on type
 func NewURLStorage(storageType StorageType, filePath string, dbPool *pgxpool.Pool) URLStorager {
-	return &URLStorage{
-		storageType: storageType,
-		memStorage:  make(map[string]models.URLStorageNode),
-		filePath:    filePath,
-		dbPool:      dbPool,
+	switch storageType {
+	case DatabaseStorageType:
+		return NewDatabaseStorage(dbPool)
+	case FileStorageType:
+		return NewFileStorage(filePath)
+	default:
+		return NewMemoryStorage()
 	}
 }
 
-// AddURL adds a new URL to storage
+// AddURL adds a new URL to storage for each of 3 storage types: memory,
+// file or database
 func (us *URLStorage) AddURL(token, longURL string) error {
 	if token == "" || longURL == "" {
 		return errors.New("token and URL cannot be empty")
@@ -62,37 +46,38 @@ func (us *URLStorage) AddURL(token, longURL string) error {
 	}
 
 	switch us.storageType {
-	case DatabaseStorage:
+	case DatabaseStorageType:
 		return us.addToDB(token, longURL)
-	case FileStorage:
+	case FileStorageType:
 		if err := us.addToFile(node); err != nil {
 			return err
 		}
-	case MemoryStorage:
+	case MemoryStorageType:
 		us.memStorage[token] = node
 	}
 
 	return nil
 }
 
-// GetURL retrieves a URL from storage
+// GetURL retrieves a URL from storage any type: memory,
+// file or database
 func (us *URLStorage) GetURL(token string) (string, error) {
 	switch us.storageType {
-	case DatabaseStorage:
+	case DatabaseStorageType:
 		return us.getFromDB(token)
-	case FileStorage:
+	case FileStorageType:
 		// Try memory first, then file if not found
 		if url, err := us.getFromMemory(token); err == nil {
 			return url, nil
 		}
 		return us.getFromFile(token)
-	case MemoryStorage:
+	case MemoryStorageType:
 		return us.getFromMemory(token)
 	}
 	return "", errors.New("invalid storage type")
 }
 
-// Memory storage methods
+// Memory storage get method
 func (us *URLStorage) getFromMemory(token string) (string, error) {
 	if node, ok := us.memStorage[token]; ok {
 		return node.OriginalURL, nil
@@ -100,7 +85,7 @@ func (us *URLStorage) getFromMemory(token string) (string, error) {
 	return "", errors.New("URL not found in memory")
 }
 
-// File storage methods
+// File storage methods add method
 func (us *URLStorage) addToFile(node models.URLStorageNode) error {
 	if us.filePath == "" {
 		return errors.New("file path not set")
@@ -129,6 +114,7 @@ func (us *URLStorage) addToFile(node models.URLStorageNode) error {
 	return nil
 }
 
+// File storage get method
 func (us *URLStorage) getFromFile(token string) (string, error) {
 	file, err := os.OpenFile(us.filePath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -150,7 +136,7 @@ func (us *URLStorage) getFromFile(token string) (string, error) {
 	return "", errors.New("URL not found in file")
 }
 
-// Database storage methods
+// Database storage add method
 func (us *URLStorage) addToDB(token, longURL string) error {
 	if us.dbPool == nil {
 		return errors.New("database not initialized")
@@ -162,6 +148,7 @@ func (us *URLStorage) addToDB(token, longURL string) error {
 	return err
 }
 
+// Database storage get method
 func (us *URLStorage) getFromDB(token string) (string, error) {
 	if us.dbPool == nil {
 		return "", errors.New("database not initialized")
@@ -231,15 +218,20 @@ func (us *URLStorage) LoadFromFile(filepath string) error {
 	return scanner.Err()
 }
 
-// New method to set database connection
+// Method to set database connection
 func (us *URLStorage) SetDBPool(pool *pgxpool.Pool) {
 	us.dbPool = pool
 }
 
+// Storage method to get the storage type:
+// 0 - Memory Storage;
+// 1 - File Storage;
+// 2 - DB Storage
 func (us *URLStorage) GetStorageType() StorageType {
 	return us.storageType
 }
 
+// Database storage method to get the pool (connection) object
 func (us *URLStorage) GetDBPool() *pgxpool.Pool {
 	return us.dbPool
 }
