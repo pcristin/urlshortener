@@ -6,21 +6,20 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mailru/easyjson"
 	"github.com/pcristin/urlshortener/internal/models"
 )
 
 type FileStorage struct {
-	urls     map[string]models.URLStorageNode
+	*MemoryStorage
 	filePath string
 }
 
 func NewFileStorage(filePath string) *FileStorage {
 	fs := &FileStorage{
-		urls:     make(map[string]models.URLStorageNode),
-		filePath: filePath,
+		MemoryStorage: NewMemoryStorage(),
+		filePath:      filePath,
 	}
 	if filePath != "" {
 		fs.LoadFromFile(filePath)
@@ -29,25 +28,19 @@ func NewFileStorage(filePath string) *FileStorage {
 }
 
 func (fs *FileStorage) AddURL(token, longURL string) error {
-	if token == "" || longURL == "" {
-		return errors.New("token and URL cannot be empty")
+	err := fs.MemoryStorage.AddURL(token, longURL)
+	if err != nil {
+		return err
 	}
-
-	node := models.URLStorageNode{
-		UUID:        uuid.New(),
-		ShortURL:    token,
-		OriginalURL: longURL,
-	}
-
-	fs.urls[token] = node
-
-	if fs.filePath != "" {
-		return fs.appendToFile(node)
-	}
-	return nil
+	node, _ := fs.Get(token)
+	return fs.appendToFile(node)
 }
 
 func (fs *FileStorage) appendToFile(node models.URLStorageNode) error {
+	if fs.filePath == "" {
+		return nil
+	}
+
 	dir := filepath.Dir(fs.filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -64,15 +57,12 @@ func (fs *FileStorage) appendToFile(node models.URLStorageNode) error {
 		return err
 	}
 
-	if _, err := file.Write(append(data, '\n')); err != nil {
-		return err
-	}
-
-	return nil
+	_, err = file.Write(append(data, '\n'))
+	return err
 }
 
 func (fs *FileStorage) GetURL(token string) (string, error) {
-	if node, ok := fs.urls[token]; ok {
+	if node, ok := fs.Get(token); ok {
 		return node.OriginalURL, nil
 	}
 	return "", errors.New("URL not found")
@@ -95,7 +85,7 @@ func (fs *FileStorage) SaveToFile() error {
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
-	for _, node := range fs.urls {
+	for _, node := range fs.cache {
 		data, err := easyjson.Marshal(&node)
 		if err != nil {
 			return err
@@ -122,7 +112,7 @@ func (fs *FileStorage) LoadFromFile(filepath string) error {
 		if err := easyjson.Unmarshal(scanner.Bytes(), &node); err != nil {
 			return err
 		}
-		fs.urls[node.ShortURL] = node
+		fs.Set(node.ShortURL, node)
 	}
 	return scanner.Err()
 }

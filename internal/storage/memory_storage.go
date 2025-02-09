@@ -9,29 +9,28 @@ import (
 )
 
 type MemoryStorage struct {
-	urls map[string]models.URLStorageNode
+	BaseStorage
 }
 
 func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{
-		urls: make(map[string]models.URLStorageNode),
-	}
+	return &MemoryStorage{BaseStorage: NewBaseStorage()}
 }
 
 func (ms *MemoryStorage) AddURL(token, longURL string) error {
 	if token == "" || longURL == "" {
 		return errors.New("token and URL cannot be empty")
 	}
-	ms.urls[token] = models.URLStorageNode{
+	node := models.URLStorageNode{
 		UUID:        uuid.New(),
 		ShortURL:    token,
 		OriginalURL: longURL,
 	}
+	ms.Set(token, node)
 	return nil
 }
 
 func (ms *MemoryStorage) GetURL(token string) (string, error) {
-	if node, ok := ms.urls[token]; ok {
+	if node, ok := ms.Get(token); ok {
 		return node.OriginalURL, nil
 	}
 	return "", errors.New("URL not found")
