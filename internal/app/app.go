@@ -154,8 +154,13 @@ func (h *Handler) APIEncodeBatchHandler(res http.ResponseWriter, req *http.Reque
 	err := easyjson.UnmarshalFromReader(req.Body, &batchRequests)
 	defer req.Body.Close()
 
-	if err != nil || len(batchRequests) == 0 {
-		http.Error(res, "bad request: incorrect or empty batch", http.StatusBadRequest)
+	if err != nil {
+		http.Error(res, "bad request: invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if len(batchRequests) == 0 {
+		http.Error(res, "bad request: empty batch", http.StatusBadRequest)
 		return
 	}
 
@@ -184,7 +189,7 @@ func (h *Handler) APIEncodeBatchHandler(res http.ResponseWriter, req *http.Reque
 
 	responseBytes, err := easyjson.Marshal(responses)
 	if err != nil {
-		http.Error(res, "internal server error", http.StatusInternalServerError)
+		http.Error(res, "internal server error: unable to marshal response", http.StatusInternalServerError)
 		return
 	}
 	res.Write(responseBytes)
