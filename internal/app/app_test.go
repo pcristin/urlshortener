@@ -187,9 +187,8 @@ func TestEncodeURLHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := NewMockStorage(storage.MemoryStorageType)
-			ctx := context.Background()
 
-			handler := NewHandler(storage, ctx)
+			handler := NewHandler(storage)
 			loggedHandler := logger.WithLogging(handler.EncodeURLHandler, log)
 
 			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBufferString(tt.body))
@@ -263,7 +262,7 @@ func TestDecodeURLHandler(t *testing.T) {
 				require.NoError(t, err, "Failed to populate storage")
 			}
 
-			handler := NewHandler(storage, context.Background())
+			handler := NewHandler(storage)
 
 			// Wrap the handler with logging
 			loggedHandler := logger.WithLogging(handler.DecodeURLHandler, log)
@@ -340,9 +339,8 @@ func TestApiEncodeHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := NewMockStorage(storage.MemoryStorageType)
-			ctx := context.Background()
 
-			handler := NewHandler(storage, ctx)
+			handler := NewHandler(storage)
 			// Wrap the handler with logging
 			loggedHandler := logger.WithLogging(handler.APIEncodeHandler, log)
 
@@ -613,8 +611,7 @@ func TestPingHandler(t *testing.T) {
 				storage = NewMockStorage(MemoryStorage)
 			}
 
-			ctx := context.Background()
-			handler := NewHandler(storage, ctx)
+			handler := NewHandler(storage)
 			loggedHandler := logger.WithLogging(handler.PingHandler, log)
 
 			req := httptest.NewRequest(tt.method, "/ping", nil)

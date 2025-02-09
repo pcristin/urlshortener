@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"io"
 	"net/http"
 
@@ -21,13 +20,11 @@ type HandlerInterface interface {
 
 type Handler struct {
 	storage storage.URLStorager
-	context context.Context
 }
 
-func NewHandler(storage storage.URLStorager, context context.Context) HandlerInterface {
+func NewHandler(storage storage.URLStorager) HandlerInterface {
 	return &Handler{
 		storage: storage,
-		context: context,
 	}
 }
 
@@ -137,7 +134,9 @@ func (h *Handler) PingHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := storage.GetDBPool().Ping(h.context); err != nil {
+	ctx := req.Context()
+
+	if err := storage.GetDBPool().Ping(ctx); err != nil {
 		http.Error(res, "internal server error", http.StatusInternalServerError)
 		return
 	}

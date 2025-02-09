@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"time"
 
@@ -57,12 +56,8 @@ func main() {
 	// Initialize storage with determined type
 	urlStorage := storage.NewURLStorage(storageType, filePath, dbPool)
 
-	// Initialize db context
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	// Initialize handler with storage
-	handler := app.NewHandler(urlStorage, ctx)
+	handler := app.NewHandler(urlStorage)
 
 	r := chi.NewRouter()
 
