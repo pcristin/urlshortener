@@ -24,8 +24,10 @@ func (r *loggingResponseWriter) Write(b []byte) (int, error) {
 	r.responseData.size += size
 	return size, err
 }
-
 func (r *loggingResponseWriter) WriteHeader(statusCode int) {
+	if r.responseData.status != 0 {
+		return
+	}
 	r.ResponseWriter.WriteHeader(statusCode)
 	r.responseData.status = statusCode
 }

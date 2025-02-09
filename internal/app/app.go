@@ -15,6 +15,7 @@ type HandlerInterface interface {
 	EncodeURLHandler(http.ResponseWriter, *http.Request)
 	DecodeURLHandler(http.ResponseWriter, *http.Request)
 	APIEncodeHandler(http.ResponseWriter, *http.Request)
+	PingHandler(http.ResponseWriter, *http.Request)
 }
 
 type Handler struct {
@@ -27,6 +28,7 @@ func NewHandler(storage storage.URLStorager) HandlerInterface {
 	}
 }
 
+// Handler to encode URL with plain text and without compressing the data
 func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(res, "bad request", http.StatusBadRequest)
@@ -53,6 +55,7 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	res.Write([]byte(resBody))
 }
 
+// Handler to decode encoded long URL
 func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(res, "bad request", http.StatusBadRequest)
@@ -79,6 +82,7 @@ func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	res.WriteHeader(http.StatusTemporaryRedirect)
 }
 
+// Handler to encode the url with compressed data
 func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost || req.Header.Get("Content-Type") != "application/json" {
 		http.Error(res, "bad request", http.StatusBadRequest)
@@ -116,4 +120,26 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "internal server error: unable to marshal response", http.StatusInternalServerError)
 	}
 	res.Write(responseBytes)
+}
+
+// Handler to check the connectivity to the database
+func (h *Handler) PingHandler(res http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(res, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Get the database storage (this handler only applicable for DB storage)
+	storage, ok := h.storage.(*storage.DatabaseStorage)
+	if !ok || storage.GetDBPool() == nil {
+		http.Error(res, "database not configured", http.StatusInternalServerError)
+		return
+	}
+
+	if err := storage.GetDBPool().Ping(req.Context()); err != nil {
+		http.Error(res, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	res.WriteHeader(http.StatusOK)
 }

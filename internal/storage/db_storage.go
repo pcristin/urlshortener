@@ -1,0 +1,78 @@
+package storage
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Type for database storage
+type DatabaseStorage struct {
+	dbPool *pgxpool.Pool
+}
+
+// Return a new object of URLStorage (database type)
+func NewDatabaseStorage(pool *pgxpool.Pool) *DatabaseStorage {
+	return &DatabaseStorage{
+		dbPool: pool,
+	}
+}
+
+// Writes a new link of token --> long URL in DB
+func (ds *DatabaseStorage) AddURL(token, longURL string) error {
+	if ds.dbPool == nil {
+		return errors.New("database not initialized")
+	}
+	if token == "" || longURL == "" {
+		return errors.New("token and URL cannot be empty")
+	}
+
+	ctx := context.Background()
+	_, err := ds.dbPool.Exec(ctx,
+		"INSERT INTO urls (token, original_url) VALUES ($1, $2)",
+		token, longURL)
+	return err
+}
+
+// Gets a long URL by token from DB
+func (ds *DatabaseStorage) GetURL(token string) (string, error) {
+	if ds.dbPool == nil {
+		return "", errors.New("database not initialized")
+	}
+
+	ctx := context.Background()
+	var longURL string
+	err := ds.dbPool.QueryRow(ctx,
+		"SELECT original_url FROM urls WHERE token = $1",
+		token).Scan(&longURL)
+	if err != nil {
+		return "", err
+	}
+	return longURL, nil
+}
+
+// Empty method from URLStorage interface
+func (ds *DatabaseStorage) SaveToFile() error {
+	return nil
+}
+
+// Empty method from URLStorage interface
+func (ds *DatabaseStorage) LoadFromFile(filepath string) error {
+	return nil
+}
+
+// Set pool for making queries to DB
+func (ds *DatabaseStorage) SetDBPool(pool *pgxpool.Pool) {
+	ds.dbPool = pool
+}
+
+// Get URLStorage type (inherited method)
+func (ds *DatabaseStorage) GetStorageType() StorageType {
+	return DatabaseStorageType
+}
+
+// Get pool for making queries to DB
+func (ds *DatabaseStorage) GetDBPool() *pgxpool.Pool {
+	return ds.dbPool
+}
