@@ -126,3 +126,20 @@ func (fs *FileStorage) GetStorageType() StorageType {
 func (fs *FileStorage) GetDBPool() *pgxpool.Pool {
 	return nil
 }
+
+func (fs *FileStorage) AddURLBatch(urls map[string]string) error {
+	// First add to memory
+	err := fs.MemoryStorage.AddURLBatch(urls)
+	if err != nil {
+		return err
+	}
+
+	// Then append each URL to file
+	for token := range urls {
+		node, _ := fs.Get(token)
+		if err := fs.appendToFile(node); err != nil {
+			return err
+		}
+	}
+	return nil
+}

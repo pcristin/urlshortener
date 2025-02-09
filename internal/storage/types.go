@@ -19,4 +19,5 @@ type URLStorager interface {
 	SetDBPool(*pgxpool.Pool)
 	GetStorageType() StorageType
 	GetDBPool() *pgxpool.Pool
+	AddURLBatch(urls map[string]string) error
 }

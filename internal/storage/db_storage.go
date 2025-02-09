@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -75,4 +76,34 @@ func (ds *DatabaseStorage) GetStorageType() StorageType {
 // Get pool for making queries to DB
 func (ds *DatabaseStorage) GetDBPool() *pgxpool.Pool {
 	return ds.dbPool
+}
+
+func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
+	if ds.dbPool == nil {
+		return errors.New("database not initialized")
+	}
+
+	ctx := context.Background()
+	tx, err := ds.dbPool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	batch := &pgx.Batch{}
+	for token, longURL := range urls {
+		batch.Queue("INSERT INTO urls (token, original_url) VALUES ($1, $2)", token, longURL)
+	}
+
+	results := tx.SendBatch(ctx, batch)
+	defer results.Close()
+
+	for range urls {
+		_, err := results.Exec()
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
 }

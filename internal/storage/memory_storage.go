@@ -53,3 +53,15 @@ func (ms *MemoryStorage) GetStorageType() StorageType {
 func (ms *MemoryStorage) GetDBPool() *pgxpool.Pool {
 	return nil
 }
+
+func (ms *MemoryStorage) AddURLBatch(urls map[string]string) error {
+	for token, longURL := range urls {
+		node := models.URLStorageNode{
+			UUID:        uuid.New(),
+			ShortURL:    token,
+			OriginalURL: longURL,
+		}
+		ms.Set(token, node)
+	}
+	return nil
+}

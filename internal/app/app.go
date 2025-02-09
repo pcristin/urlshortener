@@ -15,6 +15,7 @@ type HandlerInterface interface {
 	EncodeURLHandler(http.ResponseWriter, *http.Request)
 	DecodeURLHandler(http.ResponseWriter, *http.Request)
 	APIEncodeHandler(http.ResponseWriter, *http.Request)
+	APIEncodeBatchHandler(http.ResponseWriter, *http.Request)
 	PingHandler(http.ResponseWriter, *http.Request)
 }
 
@@ -94,13 +95,13 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	err := easyjson.UnmarshalFromReader(req.Body, &body)
 	defer req.Body.Close()
 
-	if err != nil || len(body.URL) == 0 {
+	if err != nil || len(body.OriginalURL) == 0 {
 		http.Error(res, "bad request: incorrect url", http.StatusBadRequest)
 		return
 	}
 
 	// Encode the long URL to a short URL
-	shortURL, err := uu.EncodeURL(body.URL, h.storage)
+	shortURL, err := uu.EncodeURL(body.OriginalURL, h.storage)
 	if err != nil {
 		http.Error(res, "bad request: unable to shorten provided url", http.StatusBadRequest)
 		return
@@ -108,7 +109,8 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 
 	// Prepare the response payload
 	response := mod.Response{
-		Result: "http://" + req.Host + "/" + shortURL,
+		CorrelationID: body.CorrelationID,
+		ShortURL:      "http://" + req.Host + "/" + shortURL,
 	}
 
 	res.Header().Set("Content-Type", "application/json")
@@ -142,4 +144,51 @@ func (h *Handler) PingHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	res.WriteHeader(http.StatusOK)
+}
+
+// APIEncodeBatchHandler encodes a batch of sent urls
+func (h *Handler) APIEncodeBatchHandler(res http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost || req.Header.Get("Content-Type") != "application/json" {
+		http.Error(res, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	var batchRequests mod.BatchRequest
+	err := easyjson.UnmarshalFromReader(req.Body, &batchRequests)
+	defer req.Body.Close()
+
+	if err != nil || len(batchRequests) == 0 {
+		http.Error(res, "bad request: incorrect or empty batch", http.StatusBadRequest)
+		return
+	}
+
+	// Prepare batch of URLs
+	urlBatch := make(map[string]string)
+	responses := make(mod.BatchResponse, 0, len(batchRequests))
+
+	for _, item := range batchRequests {
+		token := uu.GenerateToken()
+		urlBatch[token] = item.OriginalURL
+		responses = append(responses, mod.Response{
+			CorrelationID: item.CorrelationID,
+			ShortURL:      "http://" + req.Host + "/" + token,
+		})
+	}
+
+	// Save batch
+	if err := h.storage.AddURLBatch(urlBatch); err != nil {
+		http.Error(res, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Send response
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusCreated)
+
+	responseBytes, err := easyjson.Marshal(responses)
+	if err != nil {
+		http.Error(res, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	res.Write(responseBytes)
 }

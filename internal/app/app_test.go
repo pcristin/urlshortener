@@ -137,6 +137,18 @@ func (m *MockStorage) GetDBPool() *pgxpool.Pool {
 	return nil
 }
 
+func (m *MockStorage) AddURLBatch(urls map[string]string) error {
+	if len(urls) == 0 {
+		return errors.New("batch cannot be empty")
+	}
+	for token, longURL := range urls {
+		if err := m.AddURL(token, longURL); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func TestEncodeURLHandler(t *testing.T) {
 	log, err := logger.Initialize()
 	require.NoError(t, err)
@@ -346,7 +358,7 @@ func TestApiEncodeHandler(t *testing.T) {
 
 			// Create request body in JSON format
 			requestBody := mod.Request{
-				URL: tt.longURL,
+				OriginalURL: tt.longURL,
 			}
 
 			// Marshal the request body to JSON
@@ -623,6 +635,99 @@ func TestPingHandler(t *testing.T) {
 			defer resp.Body.Close()
 
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+		})
+	}
+}
+
+func TestAPIEncodeBatchHandler(t *testing.T) {
+	// Initialize logger
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
+	tests := []struct {
+		name               string
+		method             string
+		headersContentType string
+		batchRequests      mod.BatchRequest
+		wantStatus         int
+	}{
+		{
+			name:               "valid batch",
+			method:             http.MethodPost,
+			headersContentType: "application/json",
+			batchRequests: mod.BatchRequest{
+				{CorrelationID: "1", OriginalURL: "https://google.com"},
+				{CorrelationID: "2", OriginalURL: "https://github.com"},
+			},
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:               "empty batch",
+			method:             http.MethodPost,
+			headersContentType: "application/json",
+			batchRequests:      mod.BatchRequest{},
+			wantStatus:         http.StatusBadRequest,
+		},
+		{
+			name:               "wrong method",
+			method:             http.MethodGet,
+			headersContentType: "application/json",
+			batchRequests: mod.BatchRequest{
+				{CorrelationID: "1", OriginalURL: "https://google.com"},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:               "wrong content type",
+			method:             http.MethodPost,
+			headersContentType: "text/plain",
+			batchRequests: mod.BatchRequest{
+				{CorrelationID: "1", OriginalURL: "https://google.com"},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := NewMockStorage(storage.MemoryStorageType)
+			handler := NewHandler(storage)
+			loggedHandler := logger.WithLogging(handler.APIEncodeBatchHandler, log)
+
+			// Marshal the request body
+			bodyBytes, err := easyjson.Marshal(tt.batchRequests)
+			require.NoError(t, err)
+
+			// Create request
+			req := httptest.NewRequest(tt.method, "/api/shorten/batch", bytes.NewBuffer(bodyBytes))
+			req.Header.Set("Content-Type", tt.headersContentType)
+			w := httptest.NewRecorder()
+
+			// Call handler
+			loggedHandler(w, req)
+
+			// Check response
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+
+			if tt.wantStatus == http.StatusCreated {
+				assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+				// Read and parse response body
+				var responses mod.BatchResponse
+				err = easyjson.UnmarshalFromReader(resp.Body, &responses)
+				require.NoError(t, err)
+
+				// Verify response structure
+				assert.Equal(t, len(tt.batchRequests), len(responses))
+				for i, req := range tt.batchRequests {
+					assert.Equal(t, req.CorrelationID, responses[i].CorrelationID)
+					assert.Contains(t, responses[i].ShortURL, "http://")
+				}
+			}
 		})
 	}
 }

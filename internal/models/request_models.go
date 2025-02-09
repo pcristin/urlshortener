@@ -1,9 +1,17 @@
 package models
 
+//easyjson:json
+type BatchRequest []Request
+
+//easyjson:json
+type BatchResponse []Response
+
 type Request struct {
-	URL string `json:"url"`
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
 }
 
 type Response struct {
-	Result string `json:"result"`
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
 }
