@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,7 +31,9 @@ func (ds *DatabaseStorage) AddURL(token, longURL string) error {
 		return errors.New("token and URL cannot be empty")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	_, err := ds.dbPool.Exec(ctx,
 		"INSERT INTO urls (token, original_url) VALUES ($1, $2)",
 		token, longURL)
@@ -43,7 +46,9 @@ func (ds *DatabaseStorage) GetURL(token string) (string, error) {
 		return "", errors.New("database not initialized")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	var longURL string
 	err := ds.dbPool.QueryRow(ctx,
 		"SELECT original_url FROM urls WHERE token = $1",
@@ -88,7 +93,9 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 		return errors.New("batch cannot be empty")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	tx, err := ds.dbPool.Begin(ctx)
 	if err != nil {
 		zap.L().Sugar().Errorw("Begin transaction failed", "error", err)
@@ -104,7 +111,7 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 
 	batch := &pgx.Batch{}
 	for token, longURL := range urls {
-		zap.L().Sugar().Debugw("Queueing INSERT in batch", "token", token, "url", longURL)
+		zap.L().Sugar().Info("Queueing INSERT in batch", "token", token, "url", longURL)
 		batch.Queue("INSERT INTO urls (token, original_url) VALUES ($1, $2)", token, longURL)
 	}
 
