@@ -20,6 +20,14 @@ func (ms *MemoryStorage) AddURL(token, longURL string) error {
 	if token == "" || longURL == "" {
 		return errors.New("token and URL cannot be empty")
 	}
+
+	// Check if URL already exists
+	for _, node := range ms.cache {
+		if node.OriginalURL == longURL {
+			return ErrURLExists
+		}
+	}
+
 	node := models.URLStorageNode{
 		UUID:        uuid.New(),
 		ShortURL:    token,
@@ -64,4 +72,14 @@ func (ms *MemoryStorage) AddURLBatch(urls map[string]string) error {
 		ms.Set(token, node)
 	}
 	return nil
+}
+
+// Gets a token by original URL from memory
+func (ms *MemoryStorage) GetTokenByURL(longURL string) (string, error) {
+	for _, node := range ms.cache {
+		if node.OriginalURL == longURL {
+			return node.ShortURL, nil
+		}
+	}
+	return "", errors.New("url not found")
 }

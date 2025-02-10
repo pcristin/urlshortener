@@ -33,6 +33,7 @@ func NewDatabaseManager(databaseDSN string) (DatabaseManagerInterface, error) {
 			original_url TEXT NOT NULL,
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_urls_original_url ON urls (original_url);
 	`)
 	if err != nil {
 		pool.Close()

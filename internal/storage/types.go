@@ -1,6 +1,15 @@
 package storage
 
-import "github.com/jackc/pgx/v5/pgxpool"
+import (
+	"errors"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Common errors
+var (
+	ErrURLExists = errors.New("url already exists")
+)
 
 type StorageType int
 
@@ -20,4 +29,5 @@ type URLStorager interface {
 	GetStorageType() StorageType
 	GetDBPool() *pgxpool.Pool
 	AddURLBatch(urls map[string]string) error
+	GetTokenByURL(longURL string) (string, error)
 }

@@ -159,3 +159,13 @@ func (fs *FileStorage) AddURLBatch(urls map[string]string) error {
 	}
 	return nil
 }
+
+// Gets a token by original URL from file storage
+func (fs *FileStorage) GetTokenByURL(longURL string) (string, error) {
+	for _, node := range fs.cache {
+		if node.OriginalURL == longURL {
+			return node.ShortURL, nil
+		}
+	}
+	return "", errors.New("url not found")
+}

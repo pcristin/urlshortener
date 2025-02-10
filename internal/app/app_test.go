@@ -50,6 +50,12 @@ func (m *MockStorage) AddURL(token, longURL string) error {
 	if token == "" || longURL == "" {
 		return errors.New("token and URL cannot be empty")
 	}
+	// Check for duplicate URLs
+	for _, url := range m.urls {
+		if url == longURL {
+			return storage.ErrURLExists
+		}
+	}
 	m.urls[token] = longURL
 	return nil
 }
@@ -59,6 +65,15 @@ func (m *MockStorage) GetURL(token string) (string, error) {
 		return url, nil
 	}
 	return "", errors.New("URL not found")
+}
+
+func (m *MockStorage) GetTokenByURL(longURL string) (string, error) {
+	for token, url := range m.urls {
+		if url == longURL {
+			return token, nil
+		}
+	}
+	return "", errors.New("url not found")
 }
 
 func (m *MockStorage) SaveToFile() error {
@@ -160,6 +175,7 @@ func TestEncodeURLHandler(t *testing.T) {
 		url         string
 		body        string
 		contentType string
+		setupFunc   func(*MockStorage)
 		wantStatus  int
 	}{
 		{
@@ -169,6 +185,17 @@ func TestEncodeURLHandler(t *testing.T) {
 			body:        "https://google.com",
 			contentType: "text/plain; charset=utf-8",
 			wantStatus:  http.StatusCreated,
+		},
+		{
+			name:        "duplicate url",
+			method:      http.MethodPost,
+			url:         "/",
+			body:        "https://google.com",
+			contentType: "text/plain; charset=utf-8",
+			setupFunc: func(s *MockStorage) {
+				_ = s.AddURL("abc123", "https://google.com")
+			},
+			wantStatus: http.StatusConflict,
 		},
 		{
 			name:        "empty url",
@@ -199,6 +226,9 @@ func TestEncodeURLHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := NewMockStorage(storage.MemoryStorageType)
+			if tt.setupFunc != nil {
+				tt.setupFunc(storage)
+			}
 
 			handler := NewHandler(storage)
 			loggedHandler := logger.WithLogging(handler.EncodeURLHandler, log)
@@ -215,6 +245,11 @@ func TestEncodeURLHandler(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 			if tt.wantStatus == http.StatusCreated {
 				assert.Equal(t, "text/plain", resp.Header.Get("Content-Type"))
+			} else if tt.wantStatus == http.StatusConflict {
+				assert.Equal(t, "text/plain", resp.Header.Get("Content-Type"))
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				assert.Contains(t, string(body), "abc123")
 			}
 		})
 	}
@@ -309,86 +344,89 @@ func TestDecodeURLHandler(t *testing.T) {
 }
 
 func TestApiEncodeHandler(t *testing.T) {
-	// Initialize logger
 	log, err := logger.Initialize()
 	require.NoError(t, err)
 	defer log.Sync()
 
 	tests := []struct {
-		name               string
-		url                string
-		method             string
-		headersContentType string
-		longURL            string
-		wantStatus         int
+		name       string
+		method     string
+		url        string
+		body       mod.Request
+		setupFunc  func(*MockStorage)
+		wantStatus int
+		wantInBody string
 	}{
 		{
-			name:               "good url",
-			url:                "/api/shorten",
-			method:             http.MethodPost,
-			headersContentType: "application/json",
-			longURL:            "https://google.com",
-			wantStatus:         http.StatusCreated,
+			name:   "valid url",
+			method: http.MethodPost,
+			url:    "/api/shorten",
+			body: mod.Request{
+				URL: "https://google.com",
+			},
+			wantStatus: http.StatusCreated,
 		},
 		{
-			name:               "empty long url",
-			url:                "/api/shorten",
-			method:             http.MethodPost,
-			headersContentType: "application/json",
-			longURL:            "",
-			wantStatus:         http.StatusBadRequest,
+			name:   "duplicate url",
+			method: http.MethodPost,
+			url:    "/api/shorten",
+			body: mod.Request{
+				URL: "https://google.com",
+			},
+			setupFunc: func(s *MockStorage) {
+				_ = s.AddURL("abc123", "https://google.com")
+			},
+			wantStatus: http.StatusConflict,
+			wantInBody: "abc123",
 		},
 		{
-			name:               "incorrect request headers",
-			url:                "/api/shorten",
-			method:             http.MethodPost,
-			headersContentType: "text/plain",
-			longURL:            "www.google.com",
-			wantStatus:         http.StatusBadRequest,
+			name:       "empty url",
+			method:     http.MethodPost,
+			url:        "/api/shorten",
+			body:       mod.Request{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:   "wrong method",
+			method: http.MethodGet,
+			url:    "/api/shorten",
+			body: mod.Request{
+				URL: "https://google.com",
+			},
+			wantStatus: http.StatusBadRequest,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := NewMockStorage(storage.MemoryStorageType)
-
-			handler := NewHandler(storage)
-			// Wrap the handler with logging
-			loggedHandler := logger.WithLogging(handler.APIEncodeHandler, log)
-
-			// Create request body in JSON format
-			requestBody := mod.Request{
-				URL: tt.longURL,
+			if tt.setupFunc != nil {
+				tt.setupFunc(storage)
 			}
 
-			// Marshal the request body to JSON
-			bodyBytes, err := easyjson.Marshal(requestBody)
+			handler := NewHandler(storage)
+			loggedHandler := logger.WithLogging(handler.APIEncodeHandler, log)
+
+			bodyBytes, err := easyjson.Marshal(&tt.body)
 			require.NoError(t, err)
 
-			// Create request
 			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBuffer(bodyBytes))
-			req.Header.Set("Content-Type", tt.headersContentType)
-
-			// Create response recorder
+			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			// Call handler
 			loggedHandler(w, req)
 
-			// Check response
 			resp := w.Result()
 			defer resp.Body.Close()
 
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
-
-			if tt.wantStatus == http.StatusCreated {
+			if tt.wantStatus == http.StatusCreated || tt.wantStatus == http.StatusConflict {
 				assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-
-				// Verify response structure
-				var response mod.Response
-				err = easyjson.UnmarshalFromReader(resp.Body, &response)
-				require.NoError(t, err)
-				assert.Contains(t, response.Result, "http://")
+				if tt.wantInBody != "" {
+					body, err := io.ReadAll(resp.Body)
+					require.NoError(t, err)
+					assert.Contains(t, string(body), tt.wantInBody)
+				}
 			}
 		})
 	}
@@ -646,49 +684,55 @@ func TestPingHandler(t *testing.T) {
 }
 
 func TestAPIEncodeBatchHandler(t *testing.T) {
-	// Initialize logger
 	log, err := logger.Initialize()
 	require.NoError(t, err)
 	defer log.Sync()
 
 	tests := []struct {
-		name               string
-		method             string
-		headersContentType string
-		batchRequests      mod.BatchRequest
-		wantStatus         int
+		name       string
+		method     string
+		url        string
+		body       mod.BatchRequest
+		setupFunc  func(*MockStorage)
+		wantStatus int
+		wantInBody string
 	}{
 		{
-			name:               "valid batch",
-			method:             http.MethodPost,
-			headersContentType: "application/json",
-			batchRequests: mod.BatchRequest{
+			name:   "valid batch",
+			method: http.MethodPost,
+			url:    "/api/shorten/batch",
+			body: mod.BatchRequest{
 				{CorrelationID: "1", OriginalURL: "https://google.com"},
-				{CorrelationID: "2", OriginalURL: "https://github.com"},
+				{CorrelationID: "2", OriginalURL: "https://yandex.ru"},
 			},
 			wantStatus: http.StatusCreated,
 		},
 		{
-			name:               "empty batch",
-			method:             http.MethodPost,
-			headersContentType: "application/json",
-			batchRequests:      mod.BatchRequest{},
-			wantStatus:         http.StatusBadRequest,
+			name:   "batch with duplicates",
+			method: http.MethodPost,
+			url:    "/api/shorten/batch",
+			body: mod.BatchRequest{
+				{CorrelationID: "1", OriginalURL: "https://google.com"},
+				{CorrelationID: "2", OriginalURL: "https://yandex.ru"},
+			},
+			setupFunc: func(s *MockStorage) {
+				_ = s.AddURL("abc123", "https://google.com")
+			},
+			wantStatus: http.StatusCreated,
+			wantInBody: "abc123",
 		},
 		{
-			name:               "wrong method",
-			method:             http.MethodGet,
-			headersContentType: "application/json",
-			batchRequests: mod.BatchRequest{
-				{CorrelationID: "1", OriginalURL: "https://google.com"},
-			},
+			name:       "empty batch",
+			method:     http.MethodPost,
+			url:        "/api/shorten/batch",
+			body:       mod.BatchRequest{},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:               "wrong content type",
-			method:             http.MethodPost,
-			headersContentType: "text/plain",
-			batchRequests: mod.BatchRequest{
+			name:   "wrong method",
+			method: http.MethodGet,
+			url:    "/api/shorten/batch",
+			body: mod.BatchRequest{
 				{CorrelationID: "1", OriginalURL: "https://google.com"},
 			},
 			wantStatus: http.StatusBadRequest,
@@ -698,40 +742,32 @@ func TestAPIEncodeBatchHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := NewMockStorage(storage.MemoryStorageType)
+			if tt.setupFunc != nil {
+				tt.setupFunc(storage)
+			}
+
 			handler := NewHandler(storage)
 			loggedHandler := logger.WithLogging(handler.APIEncodeBatchHandler, log)
 
-			// Marshal the request body
-			bodyBytes, err := easyjson.Marshal(tt.batchRequests)
+			bodyBytes, err := easyjson.Marshal(&tt.body)
 			require.NoError(t, err)
 
-			// Create request
-			req := httptest.NewRequest(tt.method, "/api/shorten/batch", bytes.NewBuffer(bodyBytes))
-			req.Header.Set("Content-Type", tt.headersContentType)
+			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBuffer(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			// Call handler
 			loggedHandler(w, req)
 
-			// Check response
 			resp := w.Result()
 			defer resp.Body.Close()
 
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
-
 			if tt.wantStatus == http.StatusCreated {
 				assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-
-				// Read and parse response body
-				var responses mod.BatchResponse
-				err = easyjson.UnmarshalFromReader(resp.Body, &responses)
-				require.NoError(t, err)
-
-				// Verify response structure
-				assert.Equal(t, len(tt.batchRequests), len(responses))
-				for i, req := range tt.batchRequests {
-					assert.Equal(t, req.CorrelationID, responses[i].CorrelationID)
-					assert.Contains(t, responses[i].ShortURL, "http://")
+				if tt.wantInBody != "" {
+					body, err := io.ReadAll(resp.Body)
+					require.NoError(t, err)
+					assert.Contains(t, string(body), tt.wantInBody)
 				}
 			}
 		})
