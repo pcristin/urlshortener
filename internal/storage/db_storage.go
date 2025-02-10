@@ -110,18 +110,18 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	}
 
 	br := tx.SendBatch(ctx, batch)
-	defer func() {
-		if err := br.Close(); err != nil {
-			zap.L().Sugar().Errorw("Failed to close batch", "error", err)
-		}
-	}()
-
-	// Process every result from the batch.
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
 			zap.L().Sugar().Errorf("batch execution error at item %d: %w", i, err)
+			// Close the batch to free the connection in case of error.
+			_ = br.Close()
 			return err
 		}
+	}
+
+	if err := br.Close(); err != nil {
+		zap.L().Sugar().Errorw("Failed to close batch", "error", err)
+		return err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
