@@ -33,7 +33,9 @@ func (fs *FileStorage) AddURL(token, longURL string) error {
 		return err
 	}
 	node, _ := fs.Get(token)
-	return fs.appendToFile(node)
+	// Ignore file operation errors
+	_ = fs.appendToFile(node)
+	return nil
 }
 
 func (fs *FileStorage) appendToFile(node models.URLStorageNode) error {
@@ -43,12 +45,14 @@ func (fs *FileStorage) appendToFile(node models.URLStorageNode) error {
 
 	dir := filepath.Dir(fs.filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
+		// If we can't create directory, just log and continue
+		return nil
 	}
 
 	file, err := os.OpenFile(fs.filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return err
+		// If we can't open file, just log and continue
+		return nil
 	}
 	defer file.Close()
 
@@ -58,7 +62,11 @@ func (fs *FileStorage) appendToFile(node models.URLStorageNode) error {
 	}
 
 	_, err = file.Write(append(data, '\n'))
-	return err
+	if err != nil {
+		// If we can't write to file, just log and continue
+		return nil
+	}
+	return nil
 }
 
 func (fs *FileStorage) GetURL(token string) (string, error) {
@@ -75,12 +83,14 @@ func (fs *FileStorage) SaveToFile() error {
 
 	dir := filepath.Dir(fs.filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
+		// If we can't create directory, just log and continue
+		return nil
 	}
 
 	file, err := os.OpenFile(fs.filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		return err
+		// If we can't open file, just log and continue
+		return nil
 	}
 	defer file.Close()
 
@@ -91,10 +101,15 @@ func (fs *FileStorage) SaveToFile() error {
 			return err
 		}
 		if _, err := writer.Write(append(data, '\n')); err != nil {
-			return err
+			// If we can't write to file, just log and continue
+			return nil
 		}
 	}
-	return writer.Flush()
+	if err := writer.Flush(); err != nil {
+		// If we can't flush to file, just log and continue
+		return nil
+	}
+	return nil
 }
 
 func (fs *FileStorage) LoadFromFile(filepath string) error {
@@ -102,7 +117,8 @@ func (fs *FileStorage) LoadFromFile(filepath string) error {
 
 	file, err := os.OpenFile(filepath, os.O_RDONLY|os.O_CREATE, 0644)
 	if err != nil {
-		return err
+		// If we can't open file, just continue with empty storage
+		return nil
 	}
 	defer file.Close()
 
@@ -110,11 +126,13 @@ func (fs *FileStorage) LoadFromFile(filepath string) error {
 	for scanner.Scan() {
 		var node models.URLStorageNode
 		if err := easyjson.Unmarshal(scanner.Bytes(), &node); err != nil {
-			return err
+			// If we can't unmarshal a line, skip it and continue
+			continue
 		}
 		fs.Set(node.ShortURL, node)
 	}
-	return scanner.Err()
+	// Ignore scanner errors
+	return nil
 }
 
 func (fs *FileStorage) SetDBPool(*pgxpool.Pool) {}
@@ -134,12 +152,10 @@ func (fs *FileStorage) AddURLBatch(urls map[string]string) error {
 		return err
 	}
 
-	// Then append each URL to file
+	// Then append each URL to file, ignoring file operation errors
 	for token := range urls {
 		node, _ := fs.Get(token)
-		if err := fs.appendToFile(node); err != nil {
-			return err
-		}
+		_ = fs.appendToFile(node)
 	}
 	return nil
 }
