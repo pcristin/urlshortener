@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"io"
 	"net/http"
 
@@ -48,19 +47,6 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 
 	token, err := uu.EncodeURL(string(longURL), h.storage)
 	if err != nil {
-		if errors.Is(err, storage.ErrURLExists) {
-			// If URL exists, get its token and return it with 409 status
-			token, err := h.storage.GetTokenByURL(string(longURL))
-			if err != nil {
-				http.Error(res, "internal server error", http.StatusInternalServerError)
-				return
-			}
-			res.Header().Set("Content-Type", "text/plain")
-			res.WriteHeader(http.StatusConflict)
-			resBody := "http://" + req.Host + "/" + token
-			res.Write([]byte(resBody))
-			return
-		}
 		http.Error(res, "bad request: unable to shorten provided url", http.StatusBadRequest)
 		return
 	}
@@ -117,26 +103,6 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	// Encode the long URL to a short URL
 	shortURL, err := uu.EncodeURL(body.URL, h.storage)
 	if err != nil {
-		if errors.Is(err, storage.ErrURLExists) {
-			// If URL exists, get its token and return it with 409 status
-			token, err := h.storage.GetTokenByURL(body.URL)
-			if err != nil {
-				http.Error(res, "internal server error", http.StatusInternalServerError)
-				return
-			}
-			response := mod.Response{
-				Result: "http://" + req.Host + "/" + token,
-			}
-			res.Header().Set("Content-Type", "application/json")
-			res.WriteHeader(http.StatusConflict)
-			responseBytes, err := easyjson.Marshal(response)
-			if err != nil {
-				http.Error(res, "internal server error: unable to marshal response", http.StatusInternalServerError)
-				return
-			}
-			res.Write(responseBytes)
-			return
-		}
 		http.Error(res, "bad request: unable to shorten provided url", http.StatusBadRequest)
 		return
 	}
@@ -152,7 +118,6 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	responseBytes, err := easyjson.Marshal(response)
 	if err != nil {
 		http.Error(res, "internal server error: unable to marshal response", http.StatusInternalServerError)
-		return
 	}
 	res.Write(responseBytes)
 }
@@ -203,37 +168,21 @@ func (h *Handler) APIEncodeBatchHandler(res http.ResponseWriter, req *http.Reque
 	// Prepare batch of URLs
 	urlBatch := make(map[string]string)
 	responses := make(mod.BatchResponse, 0, len(batchRequests))
-	existingURLs := make(map[string]string) // map[originalURL]token
 
-	// First, check for existing URLs
 	for _, item := range batchRequests {
-		if token, err := h.storage.GetTokenByURL(item.OriginalURL); err == nil {
-			existingURLs[item.OriginalURL] = token
-		}
-	}
-
-	// Process URLs
-	for _, item := range batchRequests {
-		var token string
-		if existingToken, exists := existingURLs[item.OriginalURL]; exists {
-			token = existingToken
-		} else {
-			token = uu.GenerateToken()
-			urlBatch[token] = item.OriginalURL
-		}
+		token := uu.GenerateToken()
+		urlBatch[token] = item.OriginalURL
 		responses = append(responses, mod.BatchResponseItem{
 			CorrelationID: item.CorrelationID,
 			ShortURL:      "http://" + req.Host + "/" + token,
 		})
 	}
 
-	// Save new URLs
-	if len(urlBatch) > 0 {
-		if err := h.storage.AddURLBatch(urlBatch); err != nil {
-			zap.L().Sugar().Errorw("Error in AddURLBatch", "storageType", h.storage.GetStorageType(), "error", err)
-			http.Error(res, "internal server error", http.StatusInternalServerError)
-			return
-		}
+	// Save batch with temp logging
+	if err := h.storage.AddURLBatch(urlBatch); err != nil {
+		zap.L().Sugar().Errorw("Error in AddURLBatch", "storageType", h.storage.GetStorageType(), "error", err)
+		http.Error(res, "internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	// Send response
