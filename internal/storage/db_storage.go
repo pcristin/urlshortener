@@ -88,17 +88,13 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	if ds.dbPool == nil {
 		return errors.New("database not initialized")
 	}
-
 	if len(urls) == 0 {
 		return errors.New("batch cannot be empty")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
+	ctx := context.Background()
 	tx, err := ds.dbPool.Begin(ctx)
 	if err != nil {
-		zap.L().Sugar().Errorw("Begin transaction failed", "error", err)
 		return err
 	}
 	defer func() {
@@ -107,33 +103,31 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 		}
 	}()
 
-	zap.L().Sugar().Infow("Transaction started")
-
 	batch := &pgx.Batch{}
-	for token, longURL := range urls {
-		zap.L().Sugar().Info("Queueing INSERT in batch", "token", token, "url", longURL)
-		batch.Queue("INSERT INTO urls (token, original_url) VALUES ($1, $2)", token, longURL)
+	for short, original := range urls {
+		zap.L().Sugar().Infof("Queueing INSERT for short=%s, url=%s", short, original)
+		batch.Queue("INSERT INTO urls (short, original) VALUES ($1, $2)", short, original)
 	}
 
 	br := tx.SendBatch(ctx, batch)
+	defer func() {
+		if err := br.Close(); err != nil {
+			zap.L().Sugar().Errorw("Failed to close batch", "error", err)
+		}
+	}()
 
-	zap.L().Sugar().Infow("Batch sent to DB", "batch_len", batch.Len())
-
+	// Process every result from the batch.
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
-			zap.L().Sugar().Errorw("Exec in batch failed", "index", i, "error", err)
-			br.Close()
+			zap.L().Sugar().Errorf("batch execution error at item %d: %w", i, err)
 			return err
 		}
-		zap.L().Sugar().Debugw("Exec in batch succeeded", "index", i)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		zap.L().Sugar().Errorw("Commit failed", "error", err)
-		br.Close()
+		zap.L().Sugar().Errorf("commit failed: %w", err)
 		return err
 	}
-	zap.L().Sugar().Infow("Transaction committed successfully")
 
 	return nil
 }
