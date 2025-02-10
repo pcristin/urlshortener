@@ -92,6 +92,7 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	// Prepare the batch
 	batch := &pgx.Batch{}
@@ -111,5 +112,8 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	}
 
 	// Commit the transaction
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	return nil
 }
