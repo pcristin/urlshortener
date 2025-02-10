@@ -13,6 +13,7 @@ import (
 	"github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
 	"github.com/pcristin/urlshortener/internal/storage"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -40,6 +41,7 @@ func main() {
 	var filePath string
 
 	if databaseDSN := config.GetDatabaseDSN(); databaseDSN != "" {
+		zap.L().Sugar().Infow("Database config", "databaseDSN", databaseDSN)
 		dbManager, err := database.NewDatabaseManager(databaseDSN)
 		if err != nil {
 			log.Warnf("Failed to connect to database: %v", err)
