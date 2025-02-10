@@ -9,6 +9,7 @@ import (
 	mod "github.com/pcristin/urlshortener/internal/models"
 	"github.com/pcristin/urlshortener/internal/storage"
 	uu "github.com/pcristin/urlshortener/internal/urlutils"
+	"go.uber.org/zap"
 )
 
 type HandlerInterface interface {
@@ -177,8 +178,9 @@ func (h *Handler) APIEncodeBatchHandler(res http.ResponseWriter, req *http.Reque
 		})
 	}
 
-	// Save batch
+	// Save batch with temp logging
 	if err := h.storage.AddURLBatch(urlBatch); err != nil {
+		zap.L().Sugar().Errorw("Error in AddURLBatch", "storageType", h.storage.GetStorageType(), "error", err)
 		http.Error(res, "internal server error", http.StatusInternalServerError)
 		return
 	}

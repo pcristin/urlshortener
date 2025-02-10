@@ -69,6 +69,6 @@ func Initialize() (*zap.SugaredLogger, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	zap.ReplaceGlobals(prodLogger)
 	return prodLogger.Sugar(), nil
 }
