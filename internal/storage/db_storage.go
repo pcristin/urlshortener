@@ -104,9 +104,9 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	}()
 
 	batch := &pgx.Batch{}
-	for short, original := range urls {
-		zap.L().Sugar().Infof("Queueing INSERT for short=%s, url=%s", short, original)
-		batch.Queue("INSERT INTO urls (short, original) VALUES ($1, $2)", short, original)
+	for token, originalURL := range urls {
+		zap.L().Sugar().Infof("Queueing INSERT for token=%s, original_url=%s", token, originalURL)
+		batch.Queue("INSERT INTO urls (token, original_url) VALUES ($1, $2)", token, originalURL)
 	}
 
 	br := tx.SendBatch(ctx, batch)
