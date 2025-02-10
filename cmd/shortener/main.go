@@ -6,11 +6,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pcristin/urlshortener/internal/app"
 	"github.com/pcristin/urlshortener/internal/config"
+	"github.com/pcristin/urlshortener/internal/database"
 	"github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
 	"github.com/pcristin/urlshortener/internal/storage"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -29,19 +32,31 @@ func main() {
 
 	serverURL := config.GetServerURL()
 	if serverURL == "" {
-		//log.Fatalf("server address can not be empty!")
 		log.Fatal("server address can not be empty!")
 	}
 
-	// Initialize storage
-	urlStorage := storage.NewURLStorage()
+	// Determine storage type based on config
+	var storageType storage.StorageType
+	var dbPool *pgxpool.Pool
+	var filePath string
 
-	// Load data from file if path is provided
-	if filePath := config.GetPathToSavedData(); filePath != "" {
-		if err := urlStorage.LoadFromFile(filePath); err != nil {
-			log.Warnf("Failed to load data from file: %v", err)
+	if databaseDSN := config.GetDatabaseDSN(); databaseDSN != "" {
+		zap.L().Sugar().Infow("Database config", "databaseDSN", databaseDSN)
+		dbManager, err := database.NewDatabaseManager(databaseDSN)
+		if err != nil {
+			log.Warnf("Failed to connect to database: %v", err)
+		} else {
+			storageType = storage.DatabaseStorageType
+			dbPool = dbManager.GetPool()
 		}
+	} else if filePath = config.GetPathToSavedData(); filePath != "" {
+		storageType = storage.FileStorageType
+	} else {
+		storageType = storage.MemoryStorageType
 	}
+
+	// Initialize storage with determined type
+	urlStorage := storage.NewURLStorage(storageType, filePath, dbPool)
 
 	// Initialize handler with storage
 	handler := app.NewHandler(urlStorage)
@@ -54,6 +69,8 @@ func main() {
 	r.Post("/", logger.WithLogging(gzip.GzipMiddleware(handler.EncodeURLHandler), log))
 	r.Get("/{id}", logger.WithLogging(gzip.GzipMiddleware(handler.DecodeURLHandler), log))
 	r.Post("/api/shorten", logger.WithLogging(gzip.GzipMiddleware(handler.APIEncodeHandler), log))
+	r.Post("/api/shorten/batch", logger.WithLogging(gzip.GzipMiddleware(handler.APIEncodeBatchHandler), log))
+	r.Get("/ping", logger.WithLogging(handler.PingHandler, log))
 
 	log.Infow(
 		"Running server on",
