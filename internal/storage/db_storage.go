@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 // Type for database storage
@@ -90,30 +91,45 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	ctx := context.Background()
 	tx, err := ds.dbPool.Begin(ctx)
 	if err != nil {
+		zap.L().Sugar().Errorw("Begin transaction failed", "error", err)
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if rErr := tx.Rollback(ctx); rErr != nil && rErr != pgx.ErrTxClosed {
+			zap.L().Sugar().Errorw("Rollback failed", "error", rErr)
+		}
+	}()
 
-	// Prepare the batch
+	zap.L().Sugar().Infow("Transaction started")
+
 	batch := &pgx.Batch{}
 	for token, longURL := range urls {
+		zap.L().Sugar().Debugw("Queueing INSERT in batch", "token", token, "url", longURL)
 		batch.Queue("INSERT INTO urls (token, original_url) VALUES ($1, $2)", token, longURL)
 	}
 
-	// Send batch and get results
 	br := tx.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() {
+		if cErr := br.Close(); cErr != nil {
+			zap.L().Sugar().Errorw("Batch close failed", "error", cErr)
+		}
+	}()
 
-	// Execute each statement in the batch
+	zap.L().Sugar().Infow("Batch sent to DB", "batch_len", batch.Len())
+
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
+			zap.L().Sugar().Errorw("Exec in batch failed", "index", i, "error", err)
 			return err
 		}
+		zap.L().Sugar().Debugw("Exec in batch succeeded", "index", i)
 	}
 
-	// Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
+		zap.L().Sugar().Errorw("Commit failed", "error", err)
 		return err
 	}
+	zap.L().Sugar().Infow("Transaction committed successfully")
+
 	return nil
 }
