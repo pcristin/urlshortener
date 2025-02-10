@@ -40,3 +40,8 @@ func URLCheck(url string) bool {
 	var regExpURLPattern = regexp.MustCompile(`^((http|https):\/\/)?([a-zA-Z0-9.-]+(\.[a-zA-Z]{2,})+)(\/[a-zA-Z0-9-._~:?#@!$&'()*+,;=]*)?$`)
 	return regExpURLPattern.MatchString(url)
 }
+
+func GenerateToken() string {
+	length := generateRandomNumber(6, 10)
+	return generateToken(length)
+}
