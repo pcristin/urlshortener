@@ -92,9 +92,7 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 		return errors.New("batch cannot be empty")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
+	ctx := context.Background()
 	tx, err := ds.dbPool.Begin(ctx)
 	if err != nil {
 		return err
@@ -114,14 +112,16 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	br := tx.SendBatch(ctx, batch)
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
-			zap.L().Sugar().Errorf("batch execution error at item %d: %v", i, err)
-			if closeBrErr := br.Close(); closeBrErr != nil {
-				zap.L().Sugar().Errorf("batch closing error at item %d: %v", i, closeBrErr)
-			}
+			zap.L().Sugar().Errorf("batch execution error at item %d: %w", i, err)
+			_ = br.Close()
 			return err
 		}
 	}
-	defer br.Close()
+
+	if err := br.Close(); err != nil {
+		zap.L().Sugar().Errorw("Failed to close batch", "error", err)
+		return err
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		zap.L().Sugar().Errorf("commit failed: %w", err)
