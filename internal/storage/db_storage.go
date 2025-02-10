@@ -83,27 +83,33 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 		return errors.New("database not initialized")
 	}
 
+	if len(urls) == 0 {
+		return errors.New("batch cannot be empty")
+	}
+
 	ctx := context.Background()
 	tx, err := ds.dbPool.Begin(ctx)
 	if err != nil {
-		return err
+		defer tx.Rollback(ctx)
 	}
-	defer tx.Rollback(ctx)
 
+	// Prepare the batch
 	batch := &pgx.Batch{}
 	for token, longURL := range urls {
 		batch.Queue("INSERT INTO urls (token, original_url) VALUES ($1, $2)", token, longURL)
 	}
 
-	results := tx.SendBatch(ctx, batch)
-	defer results.Close()
+	// Send batch and get results
+	br := tx.SendBatch(ctx, batch)
+	defer br.Close()
 
-	for range urls {
-		_, err := results.Exec()
-		if err != nil {
+	// Execute each statement in the batch
+	for i := 0; i < batch.Len(); i++ {
+		if _, err := br.Exec(); err != nil {
 			return err
 		}
 	}
 
+	// Commit the transaction
 	return tx.Commit(ctx)
 }
