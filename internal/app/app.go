@@ -49,12 +49,6 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	token, err := uu.EncodeURL(string(longURL), h.storage)
 	if err != nil {
 		if errors.Is(err, storage.ErrURLExists) {
-			// If URL exists, get its token and return it with 409 status
-			token, err := h.storage.GetTokenByURL(string(longURL))
-			if err != nil {
-				http.Error(res, "internal server error", http.StatusInternalServerError)
-				return
-			}
 			res.Header().Set("Content-Type", "text/plain")
 			res.WriteHeader(http.StatusConflict)
 			resBody := "http://" + req.Host + "/" + token
@@ -118,14 +112,8 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	shortURL, err := uu.EncodeURL(body.URL, h.storage)
 	if err != nil {
 		if errors.Is(err, storage.ErrURLExists) {
-			// If URL exists, get its token and return it with 409 status
-			token, err := h.storage.GetTokenByURL(body.URL)
-			if err != nil {
-				http.Error(res, "internal server error", http.StatusInternalServerError)
-				return
-			}
 			response := mod.Response{
-				Result: "http://" + req.Host + "/" + token,
+				Result: "http://" + req.Host + "/" + shortURL,
 			}
 			res.Header().Set("Content-Type", "application/json")
 			res.WriteHeader(http.StatusConflict)
@@ -200,40 +188,20 @@ func (h *Handler) APIEncodeBatchHandler(res http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// Prepare batch of URLs
-	urlBatch := make(map[string]string)
+	// Process URLs and collect responses
 	responses := make(mod.BatchResponse, 0, len(batchRequests))
-	existingURLs := make(map[string]string) // map[originalURL]token
 
-	// First, check for existing URLs
 	for _, item := range batchRequests {
-		if token, err := h.storage.GetTokenByURL(item.OriginalURL); err == nil {
-			existingURLs[item.OriginalURL] = token
-		}
-	}
-
-	// Process URLs
-	for _, item := range batchRequests {
-		var token string
-		if existingToken, exists := existingURLs[item.OriginalURL]; exists {
-			token = existingToken
-		} else {
-			token = uu.GenerateToken()
-			urlBatch[token] = item.OriginalURL
+		token, err := uu.EncodeURL(item.OriginalURL, h.storage)
+		if err != nil && !errors.Is(err, storage.ErrURLExists) {
+			zap.L().Sugar().Errorw("Error encoding URL", "error", err, "url", item.OriginalURL)
+			http.Error(res, "internal server error", http.StatusInternalServerError)
+			return
 		}
 		responses = append(responses, mod.BatchResponseItem{
 			CorrelationID: item.CorrelationID,
 			ShortURL:      "http://" + req.Host + "/" + token,
 		})
-	}
-
-	// Save new URLs
-	if len(urlBatch) > 0 {
-		if err := h.storage.AddURLBatch(urlBatch); err != nil {
-			zap.L().Sugar().Errorw("Error in AddURLBatch", "storageType", h.storage.GetStorageType(), "error", err)
-			http.Error(res, "internal server error", http.StatusInternalServerError)
-			return
-		}
 	}
 
 	// Send response

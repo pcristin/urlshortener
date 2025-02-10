@@ -1,7 +1,6 @@
 package urlutils
 
 import (
-	"errors"
 	randMath "math/rand/v2"
 	"regexp"
 
@@ -27,14 +26,17 @@ func generateToken(length int) string {
 
 // Encode URL to a range number from 6 to 9 of random characters
 func EncodeURL(url string, s storage.URLStorager) (string, error) {
+	// First, check if the URL already exists
+	if token, err := s.GetTokenByURL(url); err == nil {
+		return token, storage.ErrURLExists
+	}
+
+	// If URL doesn't exist, generate a new token and add it
 	length := generateRandomNumber(6, 10)
 	token := generateToken(length)
 	err := s.AddURL(token, url)
 	if err != nil {
-		// If the error indicates that the URL already exists, return the existing token
-		if errors.Is(err, storage.ErrURLExists) {
-			return s.GetTokenByURL(url)
-		}
+		// Handle any other errors
 		return "", err
 	}
 	return token, nil
