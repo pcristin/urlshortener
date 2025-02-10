@@ -116,17 +116,13 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	}
 
 	br := tx.SendBatch(ctx, batch)
-	defer func() {
-		if cErr := br.Close(); cErr != nil {
-			zap.L().Sugar().Errorw("Batch close failed", "error", cErr)
-		}
-	}()
 
 	zap.L().Sugar().Infow("Batch sent to DB", "batch_len", batch.Len())
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
 			zap.L().Sugar().Errorw("Exec in batch failed", "index", i, "error", err)
+			br.Close()
 			return err
 		}
 		zap.L().Sugar().Debugw("Exec in batch succeeded", "index", i)
@@ -134,6 +130,7 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 
 	if err := tx.Commit(ctx); err != nil {
 		zap.L().Sugar().Errorw("Commit failed", "error", err)
+		br.Close()
 		return err
 	}
 	zap.L().Sugar().Infow("Transaction committed successfully")
