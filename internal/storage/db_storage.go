@@ -90,7 +90,7 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	ctx := context.Background()
 	tx, err := ds.dbPool.Begin(ctx)
 	if err != nil {
-		defer tx.Rollback(ctx)
+		return err
 	}
 
 	// Prepare the batch
