@@ -25,11 +25,18 @@ func generateToken(length int) string {
 }
 
 // Encode URL to a range number from 6 to 9 of random characters
-func EncodeURL(url string, storage storage.URLStorager) (string, error) {
+func EncodeURL(url string, s storage.URLStorager) (string, error) {
+	// First, check if the URL already exists
+	if token, err := s.GetTokenByURL(url); err == nil {
+		return token, storage.ErrURLExists
+	}
+
+	// If URL doesn't exist, generate a new token and add it
 	length := generateRandomNumber(6, 10)
 	token := generateToken(length)
-	err := storage.AddURL(token, url)
+	err := s.AddURL(token, url)
 	if err != nil {
+		// Handle any other errors
 		return "", err
 	}
 	return token, nil
@@ -39,4 +46,9 @@ func EncodeURL(url string, storage storage.URLStorager) (string, error) {
 func URLCheck(url string) bool {
 	var regExpURLPattern = regexp.MustCompile(`^((http|https):\/\/)?([a-zA-Z0-9.-]+(\.[a-zA-Z]{2,})+)(\/[a-zA-Z0-9-._~:?#@!$&'()*+,;=]*)?$`)
 	return regExpURLPattern.MatchString(url)
+}
+
+func GenerateToken() string {
+	length := generateRandomNumber(6, 10)
+	return generateToken(length)
 }
