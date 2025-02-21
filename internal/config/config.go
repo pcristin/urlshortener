@@ -33,6 +33,11 @@ func (o *Options) ParseFlags() {
 
 	flag.Parse()
 
+	o.LoadEnvVariables()
+}
+
+// LoadEnvVariables loads configuration from environment variables
+func (o *Options) LoadEnvVariables() {
 	if valueEnvServerURL, foundEnvServerURL := os.LookupEnv("SERVER_ADDRESS"); foundEnvServerURL && valueEnvServerURL != "" {
 		o.serverURL = os.Getenv("SERVER_ADDRESS")
 	}

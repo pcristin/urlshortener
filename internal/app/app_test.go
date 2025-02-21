@@ -35,7 +35,8 @@ const (
 func setupTestConfig() *config.Options {
 	cfg := config.NewOptions()
 	os.Setenv("SECRET_URL_SERVICE", testSecret)
-	cfg.ParseFlags()
+	// Don't parse flags in tests to avoid flag redefinition
+	cfg.LoadEnvVariables()
 	return cfg
 }
 
