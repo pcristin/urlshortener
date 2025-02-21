@@ -44,6 +44,8 @@ func easyjson91813e18DecodeGithubComPcristinUrlshortenerInternalModels(in *jlexe
 			out.ShortURL = string(in.String())
 		case "original_url":
 			out.OriginalURL = string(in.String())
+		case "user_id":
+			out.UserID = string(in.String())
 		default:
 			in.SkipRecursive()
 		}
@@ -72,6 +74,11 @@ func easyjson91813e18EncodeGithubComPcristinUrlshortenerInternalModels(out *jwri
 		const prefix string = ",\"original_url\":"
 		out.RawString(prefix)
 		out.String(string(in.OriginalURL))
+	}
+	{
+		const prefix string = ",\"user_id\":"
+		out.RawString(prefix)
+		out.String(string(in.UserID))
 	}
 	out.RawByte('}')
 }

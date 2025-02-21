@@ -27,8 +27,8 @@ func NewFileStorage(filePath string) *FileStorage {
 	return fs
 }
 
-func (fs *FileStorage) AddURL(token, longURL string) error {
-	err := fs.MemoryStorage.AddURL(token, longURL)
+func (fs *FileStorage) AddURL(token, longURL string, userID string) error {
+	err := fs.MemoryStorage.AddURL(token, longURL, userID)
 	if err != nil {
 		return err
 	}
