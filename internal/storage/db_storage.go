@@ -183,10 +183,10 @@ func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	for token, originalURL := range urls {
 		zap.L().Sugar().Infof("Queueing INSERT for token=%s, original_url=%s", token, originalURL)
 		batch.Queue(`
-			INSERT INTO urls (token, original_url) 
-			VALUES ($1, $2) 
+			INSERT INTO urls (token, original_url, user_id) 
+			VALUES ($1, $2, $3) 
 			ON CONFLICT (original_url) DO NOTHING`,
-			token, originalURL)
+			token, originalURL, uuid.New().String()) // Generate a new UUID for each URL in batch
 	}
 
 	br := tx.SendBatch(ctx, batch)
