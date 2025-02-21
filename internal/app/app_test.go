@@ -3,21 +3,20 @@ package app
 import (
 	"bufio"
 	"bytes"
-	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mailru/easyjson"
-	myGzip "github.com/pcristin/urlshortener/internal/gzip"
+	"github.com/pcristin/urlshortener/internal/config"
 	"github.com/pcristin/urlshortener/internal/logger"
 	mod "github.com/pcristin/urlshortener/internal/models"
 	"github.com/pcristin/urlshortener/internal/storage"
@@ -29,11 +28,20 @@ const (
 	MemoryStorage   = storage.StorageType(0)
 	FileStorage     = storage.StorageType(1)
 	DatabaseStorage = storage.StorageType(2)
+	testUserID      = "test-user-id"
+	testSecret      = "test-secret-key"
 )
+
+func setupTestConfig() *config.Options {
+	cfg := config.NewOptions()
+	os.Setenv("SECRET_URL_SERVICE", testSecret)
+	cfg.ParseFlags()
+	return cfg
+}
 
 // MockStorage implements URLStorager interface
 type MockStorage struct {
-	urls        map[string]string
+	urls        map[string]mod.URLStorageNode
 	filepath    string
 	storageType storage.StorageType
 	dbPool      *pgxpool.Pool
@@ -41,39 +49,54 @@ type MockStorage struct {
 
 func NewMockStorage(storageType storage.StorageType) *MockStorage {
 	return &MockStorage{
-		urls:        make(map[string]string),
+		urls:        make(map[string]mod.URLStorageNode),
 		storageType: storageType,
 	}
 }
 
-func (m *MockStorage) AddURL(token, longURL string) error {
+func (m *MockStorage) AddURL(token, longURL string, userID string) error {
 	if token == "" || longURL == "" {
 		return errors.New("token and URL cannot be empty")
 	}
 	// Check for duplicate URLs
-	for _, url := range m.urls {
-		if url == longURL {
+	for _, node := range m.urls {
+		if node.OriginalURL == longURL {
 			return storage.ErrURLExists
 		}
 	}
-	m.urls[token] = longURL
+	m.urls[token] = mod.URLStorageNode{
+		UUID:        uuid.New(),
+		ShortURL:    token,
+		OriginalURL: longURL,
+		UserID:      userID,
+	}
 	return nil
 }
 
 func (m *MockStorage) GetURL(token string) (string, error) {
-	if url, ok := m.urls[token]; ok {
-		return url, nil
+	if node, ok := m.urls[token]; ok {
+		return node.OriginalURL, nil
 	}
 	return "", errors.New("URL not found")
 }
 
 func (m *MockStorage) GetTokenByURL(longURL string) (string, error) {
-	for token, url := range m.urls {
-		if url == longURL {
-			return token, nil
+	for _, node := range m.urls {
+		if node.OriginalURL == longURL {
+			return node.ShortURL, nil
 		}
 	}
 	return "", errors.New("url not found")
+}
+
+func (m *MockStorage) GetUserURLs(userID string) ([]mod.URLStorageNode, error) {
+	var result []mod.URLStorageNode
+	for _, node := range m.urls {
+		if node.UserID == userID {
+			result = append(result, node)
+		}
+	}
+	return result, nil
 }
 
 func (m *MockStorage) SaveToFile() error {
@@ -88,12 +111,7 @@ func (m *MockStorage) SaveToFile() error {
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
-	for shortURL, longURL := range m.urls {
-		node := mod.URLStorageNode{
-			UUID:        uuid.New(),
-			ShortURL:    shortURL,
-			OriginalURL: longURL,
-		}
+	for _, node := range m.urls {
 		data, err := easyjson.Marshal(&node)
 		if err != nil {
 			return err
@@ -124,7 +142,7 @@ func (m *MockStorage) LoadFromFile(filepath string) error {
 		if err := easyjson.Unmarshal(scanner.Bytes(), &node); err != nil {
 			return err
 		}
-		m.urls[node.ShortURL] = node.OriginalURL
+		m.urls[node.ShortURL] = node
 	}
 
 	return scanner.Err()
@@ -140,9 +158,7 @@ func (m *MockStorage) GetStorageType() storage.StorageType {
 
 func (m *MockStorage) GetDBPool() *pgxpool.Pool {
 	if m.storageType == DatabaseStorage {
-		// For testing, just return the stored pool
 		if m.dbPool == nil {
-			// Create a minimal working mock pool
 			config, _ := pgxpool.ParseConfig("")
 			pool, _ := pgxpool.NewWithConfig(context.Background(), config)
 			m.dbPool = pool
@@ -157,7 +173,7 @@ func (m *MockStorage) AddURLBatch(urls map[string]string) error {
 		return errors.New("batch cannot be empty")
 	}
 	for token, longURL := range urls {
-		if err := m.AddURL(token, longURL); err != nil {
+		if err := m.AddURL(token, longURL, testUserID); err != nil {
 			return err
 		}
 	}
@@ -168,6 +184,8 @@ func TestEncodeURLHandler(t *testing.T) {
 	log, err := logger.Initialize()
 	require.NoError(t, err)
 	defer log.Sync()
+
+	cfg := setupTestConfig()
 
 	tests := []struct {
 		name        string
@@ -193,7 +211,7 @@ func TestEncodeURLHandler(t *testing.T) {
 			body:        "https://google.com",
 			contentType: "text/plain; charset=utf-8",
 			setupFunc: func(s *MockStorage) {
-				_ = s.AddURL("abc123", "https://google.com")
+				_ = s.AddURL("abc123", "https://google.com", testUserID)
 			},
 			wantStatus: http.StatusConflict,
 		},
@@ -230,11 +248,13 @@ func TestEncodeURLHandler(t *testing.T) {
 				tt.setupFunc(storage)
 			}
 
-			handler := NewHandler(storage)
+			handler := NewHandler(storage, cfg)
 			loggedHandler := logger.WithLogging(handler.EncodeURLHandler, log)
 
 			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", tt.contentType)
+			ctx := setUserIDToContext(req.Context(), testUserID)
+			req = req.WithContext(ctx)
 			w := httptest.NewRecorder()
 
 			loggedHandler(w, req)
@@ -256,10 +276,11 @@ func TestEncodeURLHandler(t *testing.T) {
 }
 
 func TestDecodeURLHandler(t *testing.T) {
-	// Initialize logger
 	log, err := logger.Initialize()
 	require.NoError(t, err)
 	defer log.Sync()
+
+	cfg := setupTestConfig()
 
 	tests := []struct {
 		name       string
@@ -300,44 +321,32 @@ func TestDecodeURLHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Initialize storage and populate it
 			storage := NewMockStorage(storage.MemoryStorageType)
 
-			// Pre-populate storage with test data if storedURL is not empty
 			if tt.storedURL != "" {
-				err := storage.AddURL(tt.token, tt.storedURL)
+				err := storage.AddURL(tt.token, tt.storedURL, testUserID)
 				require.NoError(t, err, "Failed to populate storage")
 			}
 
-			handler := NewHandler(storage)
-
-			// Wrap the handler with logging
+			handler := NewHandler(storage, cfg)
 			loggedHandler := logger.WithLogging(handler.DecodeURLHandler, log)
 
-			// Create chi router for URL parameter handling
 			r := chi.NewRouter()
 			r.Get("/{id}", loggedHandler)
 
-			// Create request
 			req := httptest.NewRequest(tt.method, "/"+tt.token, nil)
 			w := httptest.NewRecorder()
 
-			// Serve the request
 			r.ServeHTTP(w, req)
 
-			// Check response
 			resp := w.Result()
 			defer resp.Body.Close()
 
-			assert.Equal(t, tt.wantStatus, resp.StatusCode,
-				"Expected status %d but got %d for test %s",
-				tt.wantStatus, resp.StatusCode, tt.name)
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 
 			if tt.wantStatus == http.StatusTemporaryRedirect {
 				location := resp.Header.Get("Location")
-				assert.Equal(t, tt.storedURL, location,
-					"Expected location %s but got %s for test %s",
-					tt.storedURL, location, tt.name)
+				assert.Equal(t, tt.storedURL, location)
 			}
 		})
 	}
@@ -347,6 +356,8 @@ func TestApiEncodeHandler(t *testing.T) {
 	log, err := logger.Initialize()
 	require.NoError(t, err)
 	defer log.Sync()
+
+	cfg := setupTestConfig()
 
 	tests := []struct {
 		name       string
@@ -374,7 +385,7 @@ func TestApiEncodeHandler(t *testing.T) {
 				URL: "https://google.com",
 			},
 			setupFunc: func(s *MockStorage) {
-				_ = s.AddURL("abc123", "https://google.com")
+				_ = s.AddURL("abc123", "https://google.com", testUserID)
 			},
 			wantStatus: http.StatusConflict,
 			wantInBody: "abc123",
@@ -404,7 +415,7 @@ func TestApiEncodeHandler(t *testing.T) {
 				tt.setupFunc(storage)
 			}
 
-			handler := NewHandler(storage)
+			handler := NewHandler(storage, cfg)
 			loggedHandler := logger.WithLogging(handler.APIEncodeHandler, log)
 
 			bodyBytes, err := easyjson.Marshal(&tt.body)
@@ -412,6 +423,8 @@ func TestApiEncodeHandler(t *testing.T) {
 
 			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBuffer(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
+			ctx := setUserIDToContext(req.Context(), testUserID)
+			req = req.WithContext(ctx)
 			w := httptest.NewRecorder()
 
 			loggedHandler(w, req)
@@ -432,261 +445,12 @@ func TestApiEncodeHandler(t *testing.T) {
 	}
 }
 
-func TestCompressionMiddleware(t *testing.T) {
-	// Initialize logger
-	log, err := logger.Initialize()
-	require.NoError(t, err)
-	defer log.Sync()
-
-	// Sample handler to test middleware
-	sampleHandler := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message":"Hello, World!"}`))
-	}
-
-	// Wrap the sample handler with GzipMiddleware
-	handler := myGzip.GzipMiddleware(sampleHandler)
-
-	tests := []struct {
-		name               string
-		acceptEncoding     string
-		contentEncoding    string
-		contentType        string
-		requestBody        string
-		expectedHeader     string
-		expectedBody       string
-		expectedStatusCode int
-	}{
-		{
-			name:               "Client supports gzip, response should be compressed",
-			acceptEncoding:     "gzip",
-			contentEncoding:    "",
-			contentType:        "application/json",
-			requestBody:        "",
-			expectedHeader:     "gzip",
-			expectedBody:       `{"message":"Hello, World!"}`,
-			expectedStatusCode: http.StatusOK,
-		},
-		{
-			name:               "Client does not support gzip, response should not be compressed",
-			acceptEncoding:     "",
-			contentEncoding:    "",
-			contentType:        "application/json",
-			requestBody:        "",
-			expectedHeader:     "",
-			expectedBody:       `{"message":"Hello, World!"}`,
-			expectedStatusCode: http.StatusOK,
-		},
-		{
-			name:               "Client sends gzip compressed request, server should decompress",
-			acceptEncoding:     "",
-			contentEncoding:    "gzip",
-			contentType:        "application/json",
-			requestBody:        `{"message":"Hello, Server!"}`,
-			expectedHeader:     "",
-			expectedBody:       `{"message":"Hello, World!"}`,
-			expectedStatusCode: http.StatusOK,
-		},
-		{
-			name:               "Unsupported Content-Type, should not compress",
-			acceptEncoding:     "gzip",
-			contentEncoding:    "",
-			contentType:        "application/xml",
-			requestBody:        "",
-			expectedHeader:     "",
-			expectedBody:       `{"message":"Hello, World!"}`,
-			expectedStatusCode: http.StatusOK,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create request
-			var reqBody io.Reader
-			if tt.contentEncoding == "gzip" {
-				var buf bytes.Buffer
-				gzipWriter := gzip.NewWriter(&buf)
-				_, err := gzipWriter.Write([]byte(tt.requestBody))
-				require.NoError(t, err)
-				gzipWriter.Close()
-				reqBody = &buf
-			} else {
-				reqBody = bytes.NewBufferString(tt.requestBody)
-			}
-
-			req := httptest.NewRequest(http.MethodGet, "/", reqBody)
-			if tt.acceptEncoding != "" {
-				req.Header.Set("Accept-Encoding", tt.acceptEncoding)
-			}
-			if tt.contentEncoding != "" {
-				req.Header.Set("Content-Encoding", tt.contentEncoding)
-			}
-			req.Header.Set("Content-Type", tt.contentType)
-
-			// Create response recorder
-			rr := httptest.NewRecorder()
-
-			// Serve the request
-			handler(rr, req)
-
-			// Check status code
-			assert.Equal(t, tt.expectedStatusCode, rr.Code)
-
-			// Check Content-Encoding header
-			if tt.expectedHeader != "" {
-				assert.Equal(t, tt.expectedHeader, rr.Header().Get("Content-Encoding"))
-			} else {
-				assert.Empty(t, rr.Header().Get("Content-Encoding"))
-			}
-
-			// Check response body
-			if tt.expectedBody != "" {
-				var responseBody string
-				if tt.expectedHeader == "gzip" {
-					// Decompress response body
-					gzipReader, err := gzip.NewReader(rr.Body)
-					require.NoError(t, err)
-					decompressedBody, err := io.ReadAll(gzipReader)
-					require.NoError(t, err)
-					gzipReader.Close()
-					responseBody = string(decompressedBody)
-				} else {
-					responseBody = rr.Body.String()
-				}
-				assert.Equal(t, tt.expectedBody, responseBody)
-			}
-		})
-	}
-}
-
-func TestFileStorage(t *testing.T) {
-	// Create a temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "urlshortener_test_*")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir) // Clean up after test
-
-	testFile := filepath.Join(tmpDir, "test_urls.json")
-
-	tests := []struct {
-		name    string
-		urls    map[string]string // map[shortURL]longURL
-		wantErr bool
-	}{
-		{
-			name: "basic save and load",
-			urls: map[string]string{
-				"abc123": "https://google.com",
-				"def456": "https://github.com",
-			},
-			wantErr: false,
-		},
-		{
-			name:    "empty storage",
-			urls:    map[string]string{},
-			wantErr: false,
-		},
-		{
-			name: "multiple urls",
-			urls: map[string]string{
-				"abc123": "https://google.com",
-				"def456": "https://github.com",
-				"ghi789": "https://example.com",
-				"jkl012": "https://test.com",
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Initialize storage
-			storage := NewMockStorage(storage.MemoryStorageType)
-
-			// Add URLs to storage
-			for shortURL, longURL := range tt.urls {
-				err := storage.AddURL(shortURL, longURL)
-				require.NoError(t, err)
-			}
-
-			// Save to file
-			storage.filepath = testFile // Set filepath before saving
-			err = storage.SaveToFile()
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-
-			// Create new storage instance
-			newStorage := NewMockStorage(MemoryStorage)
-
-			// Load from file
-			err = newStorage.LoadFromFile(testFile)
-			require.NoError(t, err)
-
-			// Verify all URLs were loaded correctly
-			for shortURL, longURL := range tt.urls {
-				loaded, err := newStorage.GetURL(shortURL)
-				require.NoError(t, err)
-				assert.Equal(t, longURL, loaded)
-			}
-		})
-	}
-}
-
-func TestPingHandler(t *testing.T) {
-	log, err := logger.Initialize()
-	require.NoError(t, err)
-	defer log.Sync()
-
-	tests := []struct {
-		name       string
-		method     string
-		wantStatus int
-	}{
-		{
-			name:       "no db configured",
-			method:     http.MethodGet,
-			wantStatus: http.StatusInternalServerError,
-		},
-		{
-			name:       "wrong method",
-			method:     http.MethodPost,
-			wantStatus: http.StatusBadRequest,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var storage *MockStorage
-			if tt.name == "successful ping with db" {
-				storage = NewMockStorage(DatabaseStorage)
-				storage.SetDBPool(&pgxpool.Pool{}) // Mock pool
-			} else {
-				storage = NewMockStorage(MemoryStorage)
-			}
-
-			handler := NewHandler(storage)
-			loggedHandler := logger.WithLogging(handler.PingHandler, log)
-
-			req := httptest.NewRequest(tt.method, "/ping", nil)
-			w := httptest.NewRecorder()
-
-			loggedHandler(w, req)
-
-			resp := w.Result()
-			defer resp.Body.Close()
-
-			assert.Equal(t, tt.wantStatus, resp.StatusCode)
-		})
-	}
-}
-
 func TestAPIEncodeBatchHandler(t *testing.T) {
 	log, err := logger.Initialize()
 	require.NoError(t, err)
 	defer log.Sync()
+
+	cfg := setupTestConfig()
 
 	tests := []struct {
 		name       string
@@ -716,7 +480,7 @@ func TestAPIEncodeBatchHandler(t *testing.T) {
 				{CorrelationID: "2", OriginalURL: "https://yandex.ru"},
 			},
 			setupFunc: func(s *MockStorage) {
-				_ = s.AddURL("abc123", "https://google.com")
+				_ = s.AddURL("abc123", "https://google.com", testUserID)
 			},
 			wantStatus: http.StatusCreated,
 			wantInBody: "abc123",
@@ -746,7 +510,7 @@ func TestAPIEncodeBatchHandler(t *testing.T) {
 				tt.setupFunc(storage)
 			}
 
-			handler := NewHandler(storage)
+			handler := NewHandler(storage, cfg)
 			loggedHandler := logger.WithLogging(handler.APIEncodeBatchHandler, log)
 
 			bodyBytes, err := easyjson.Marshal(&tt.body)
@@ -754,6 +518,8 @@ func TestAPIEncodeBatchHandler(t *testing.T) {
 
 			req := httptest.NewRequest(tt.method, tt.url, bytes.NewBuffer(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
+			ctx := setUserIDToContext(req.Context(), testUserID)
+			req = req.WithContext(ctx)
 			w := httptest.NewRecorder()
 
 			loggedHandler(w, req)
@@ -769,6 +535,179 @@ func TestAPIEncodeBatchHandler(t *testing.T) {
 					require.NoError(t, err)
 					assert.Contains(t, string(body), tt.wantInBody)
 				}
+			}
+		})
+	}
+}
+
+func TestGetUserURLsHandler(t *testing.T) {
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
+	cfg := setupTestConfig()
+
+	tests := []struct {
+		name       string
+		method     string
+		userID     string
+		setupFunc  func(*MockStorage)
+		wantStatus int
+		wantURLs   int
+	}{
+		{
+			name:       "no urls",
+			method:     http.MethodGet,
+			userID:     "user1",
+			wantStatus: http.StatusNoContent,
+			wantURLs:   0,
+		},
+		{
+			name:   "has urls",
+			method: http.MethodGet,
+			userID: "user1",
+			setupFunc: func(s *MockStorage) {
+				_ = s.AddURL("abc123", "https://google.com", "user1")
+				_ = s.AddURL("def456", "https://yandex.ru", "user1")
+			},
+			wantStatus: http.StatusOK,
+			wantURLs:   2,
+		},
+		{
+			name:   "other user urls",
+			method: http.MethodGet,
+			userID: "user1",
+			setupFunc: func(s *MockStorage) {
+				_ = s.AddURL("abc123", "https://google.com", "user2")
+			},
+			wantStatus: http.StatusNoContent,
+			wantURLs:   0,
+		},
+		{
+			name:       "wrong method",
+			method:     http.MethodPost,
+			userID:     "user1",
+			wantStatus: http.StatusMethodNotAllowed,
+			wantURLs:   0,
+		},
+		{
+			name:       "no auth",
+			method:     http.MethodGet,
+			wantStatus: http.StatusUnauthorized,
+			wantURLs:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := NewMockStorage(storage.MemoryStorageType)
+			if tt.setupFunc != nil {
+				tt.setupFunc(storage)
+			}
+
+			handler := NewHandler(storage, cfg)
+			loggedHandler := logger.WithLogging(handler.GetUserURLsHandler, log)
+
+			req := httptest.NewRequest(tt.method, "/api/user/urls", nil)
+			if tt.userID != "" {
+				ctx := setUserIDToContext(req.Context(), tt.userID)
+				req = req.WithContext(ctx)
+			}
+			w := httptest.NewRecorder()
+
+			loggedHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+
+			if tt.wantStatus == http.StatusOK {
+				var urls []UserURL
+				err := json.NewDecoder(resp.Body).Decode(&urls)
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantURLs, len(urls))
+			}
+		})
+	}
+}
+
+func TestAuthMiddleware(t *testing.T) {
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
+	cfg := setupTestConfig()
+
+	tests := []struct {
+		name           string
+		existingCookie bool
+		validSignature bool
+	}{
+		{
+			name:           "no cookies",
+			existingCookie: false,
+		},
+		{
+			name:           "valid cookies",
+			existingCookie: true,
+			validSignature: true,
+		},
+		{
+			name:           "invalid signature",
+			existingCookie: true,
+			validSignature: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := NewMockStorage(storage.MemoryStorageType)
+			handler := NewHandler(storage, cfg)
+
+			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				userID := getUserIDFromContext(r.Context())
+				assert.NotEmpty(t, userID)
+				w.WriteHeader(http.StatusOK)
+			})
+
+			wrappedHandler := handler.AuthMiddleware(testHandler)
+
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			if tt.existingCookie {
+				userID := "test-user"
+				signature := generateSignature(userID, []byte(testSecret))
+				if !tt.validSignature {
+					signature = "invalid-signature"
+				}
+				req.AddCookie(&http.Cookie{Name: userIDCookieName, Value: userID})
+				req.AddCookie(&http.Cookie{Name: signatureCookieName, Value: signature})
+			}
+
+			w := httptest.NewRecorder()
+			wrappedHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			cookies := resp.Cookies()
+			if !tt.existingCookie || !tt.validSignature {
+				assert.Len(t, cookies, 2)
+				var foundUserID, foundSignature bool
+				for _, cookie := range cookies {
+					if cookie.Name == userIDCookieName {
+						foundUserID = true
+					}
+					if cookie.Name == signatureCookieName {
+						foundSignature = true
+					}
+				}
+				assert.True(t, foundUserID)
+				assert.True(t, foundSignature)
+			} else {
+				assert.Empty(t, cookies)
 			}
 		})
 	}

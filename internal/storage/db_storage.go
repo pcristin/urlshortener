@@ -5,10 +5,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pcristin/urlshortener/internal/models"
 	"go.uber.org/zap"
 )
 
@@ -25,7 +27,7 @@ func NewDatabaseStorage(pool *pgxpool.Pool) *DatabaseStorage {
 }
 
 // Writes a new link of token --> long URL in DB
-func (ds *DatabaseStorage) AddURL(token, longURL string) error {
+func (ds *DatabaseStorage) AddURL(token, longURL string, userID string) error {
 	if ds.dbPool == nil {
 		return errors.New("database not initialized")
 	}
@@ -37,8 +39,8 @@ func (ds *DatabaseStorage) AddURL(token, longURL string) error {
 	defer cancel()
 
 	_, err := ds.dbPool.Exec(ctx,
-		"INSERT INTO urls (token, original_url) VALUES ($1, $2)",
-		token, longURL)
+		"INSERT INTO urls (token, original_url, user_id) VALUES ($1, $2, $3)",
+		token, longURL, userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
@@ -85,9 +87,52 @@ func (ds *DatabaseStorage) GetTokenByURL(longURL string) (string, error) {
 		"SELECT token FROM urls WHERE original_url = $1",
 		longURL).Scan(&token)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", errors.New("url not found")
+		}
 		return "", err
 	}
 	return token, nil
+}
+
+// GetUserURLs returns all URLs shortened by a specific user
+func (ds *DatabaseStorage) GetUserURLs(userID string) ([]models.URLStorageNode, error) {
+	if ds.dbPool == nil {
+		return nil, errors.New("database not initialized")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := ds.dbPool.Query(ctx,
+		"SELECT id, token, original_url FROM urls WHERE user_id = $1",
+		userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var urls []models.URLStorageNode
+	for rows.Next() {
+		var node models.URLStorageNode
+		var id string
+		err := rows.Scan(&id, &node.ShortURL, &node.OriginalURL)
+		if err != nil {
+			return nil, err
+		}
+		node.UUID, err = uuid.Parse(id)
+		if err != nil {
+			return nil, err
+		}
+		node.UserID = userID
+		urls = append(urls, node)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return urls, nil
 }
 
 // Empty method from URLStorage interface

@@ -10,6 +10,7 @@ type Options struct {
 	baseURL         string
 	pathToSavedData string
 	databaseDSN     string
+	secret          string
 }
 
 // NewOptions creates a new Options instance
@@ -19,6 +20,7 @@ func NewOptions() *Options {
 		baseURL:         "",
 		pathToSavedData: "saved_data.json",
 		databaseDSN:     "",
+		secret:          "",
 	}
 }
 
@@ -46,6 +48,10 @@ func (o *Options) ParseFlags() {
 	if valueDatabaseDSN, foundDatabaseDSN := os.LookupEnv("DATABASE_DSN"); foundDatabaseDSN && valueDatabaseDSN != "" {
 		o.databaseDSN = os.Getenv("DATABASE_DSN")
 	}
+
+	if valueSecret, foundSecret := os.LookupEnv("SECRET_URL_SERVICE"); foundSecret && valueSecret != "" {
+		o.secret = os.Getenv("SECRET_URL_SERVICE")
+	}
 }
 
 // GetServerURL returns the server URL
@@ -63,7 +69,12 @@ func (o *Options) GetPathToSavedData() string {
 	return o.pathToSavedData
 }
 
-// GetDatabaseDSN returns the
+// GetDatabaseDSN returns the database connection string
 func (o *Options) GetDatabaseDSN() string {
 	return o.databaseDSN
+}
+
+// GetSecret returns the secret key for URL service
+func (o *Options) GetSecret() string {
+	return o.secret
 }

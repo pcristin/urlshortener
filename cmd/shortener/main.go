@@ -58,19 +58,20 @@ func main() {
 	// Initialize storage with determined type
 	urlStorage := storage.NewURLStorage(storageType, filePath, dbPool)
 
-	// Initialize handler with storage
-	handler := app.NewHandler(urlStorage)
+	// Initialize handler with storage and config
+	handler := app.NewHandler(urlStorage, config)
 
 	r := chi.NewRouter()
 
 	// Set up the middlewares: 60s timeout
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	r.Post("/", logger.WithLogging(gzip.GzipMiddleware(handler.EncodeURLHandler), log))
+	r.Post("/", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.EncodeURLHandler)), log))
 	r.Get("/{id}", logger.WithLogging(gzip.GzipMiddleware(handler.DecodeURLHandler), log))
-	r.Post("/api/shorten", logger.WithLogging(gzip.GzipMiddleware(handler.APIEncodeHandler), log))
-	r.Post("/api/shorten/batch", logger.WithLogging(gzip.GzipMiddleware(handler.APIEncodeBatchHandler), log))
+	r.Post("/api/shorten", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.APIEncodeHandler)), log))
+	r.Post("/api/shorten/batch", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.APIEncodeBatchHandler)), log))
 	r.Get("/ping", logger.WithLogging(handler.PingHandler, log))
+	r.Get("/api/user/urls", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.GetUserURLsHandler)), log))
 
 	log.Infow(
 		"Running server on",
