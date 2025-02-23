@@ -9,5 +9,6 @@ type HandlerInterface interface {
 	APIEncodeBatchHandler(http.ResponseWriter, *http.Request)
 	PingHandler(http.ResponseWriter, *http.Request)
 	GetUserURLsHandler(http.ResponseWriter, *http.Request)
+	DeleteUserURLsHandler(http.ResponseWriter, *http.Request)
 	AuthMiddleware(http.HandlerFunc) http.HandlerFunc
 }

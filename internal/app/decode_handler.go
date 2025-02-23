@@ -1,35 +1,37 @@
 package app
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/pcristin/urlshortener/internal/storage"
 	uu "github.com/pcristin/urlshortener/internal/urlutils"
 )
 
-// Handler to decode encoded long URL
+// Handler to decode URL with plain text and without compressing the data
 func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(res, "bad request", http.StatusBadRequest)
+		http.Error(res, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	token := chi.URLParam(req, "id")
 	if token == "" {
-		http.Error(res, "bad request", http.StatusBadRequest)
+		http.Error(res, "bad request: incorrect token", http.StatusBadRequest)
 		return
 	}
 
-	defer req.Body.Close()
-
 	longURL, err := uu.DecodeURL(token, h.storage)
-	if err != nil || longURL == "" {
-		http.Error(res, "bad request", http.StatusBadRequest)
+	if err != nil {
+		if errors.Is(err, storage.ErrURLDeleted) {
+			http.Error(res, "URL was deleted", http.StatusGone)
+			return
+		}
+		http.Error(res, "bad request: unable to decode provided token", http.StatusBadRequest)
 		return
 	}
 
 	res.Header().Set("Location", longURL)
-	res.Header().Del("Date")
-	res.Header().Del("Content-Type")
 	res.WriteHeader(http.StatusTemporaryRedirect)
 }

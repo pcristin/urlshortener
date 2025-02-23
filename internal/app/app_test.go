@@ -76,6 +76,9 @@ func (m *MockStorage) AddURL(token, longURL string, userID string) error {
 
 func (m *MockStorage) GetURL(token string) (string, error) {
 	if node, ok := m.urls[token]; ok {
+		if node.IsDeleted {
+			return "", storage.ErrURLDeleted
+		}
 		return node.OriginalURL, nil
 	}
 	return "", errors.New("URL not found")
@@ -176,6 +179,20 @@ func (m *MockStorage) AddURLBatch(urls map[string]string) error {
 	for token, longURL := range urls {
 		if err := m.AddURL(token, longURL, testUserID); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (m *MockStorage) DeleteURLs(userID string, tokens []string) error {
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	for _, token := range tokens {
+		if node, ok := m.urls[token]; ok && node.UserID == userID {
+			node.IsDeleted = true
+			m.urls[token] = node
 		}
 	}
 	return nil
@@ -709,6 +726,95 @@ func TestAuthMiddleware(t *testing.T) {
 				assert.True(t, foundSignature)
 			} else {
 				assert.Empty(t, cookies)
+			}
+		})
+	}
+}
+
+func TestDeleteUserURLsHandler(t *testing.T) {
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
+	cfg := setupTestConfig()
+
+	tests := []struct {
+		name       string
+		method     string
+		userID     string
+		body       []string
+		setupFunc  func(*MockStorage)
+		wantStatus int
+	}{
+		{
+			name:   "successful deletion",
+			method: http.MethodDelete,
+			userID: "user1",
+			body:   []string{"abc123", "def456"},
+			setupFunc: func(s *MockStorage) {
+				_ = s.AddURL("abc123", "https://google.com", "user1")
+				_ = s.AddURL("def456", "https://yandex.ru", "user1")
+			},
+			wantStatus: http.StatusAccepted,
+		},
+		{
+			name:       "empty tokens list",
+			method:     http.MethodDelete,
+			userID:     "user1",
+			body:       []string{},
+			wantStatus: http.StatusAccepted,
+		},
+		{
+			name:       "wrong method",
+			method:     http.MethodPost,
+			userID:     "user1",
+			body:       []string{"abc123"},
+			wantStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:       "no auth",
+			method:     http.MethodDelete,
+			body:       []string{"abc123"},
+			wantStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := NewMockStorage(storage.MemoryStorageType)
+			if tt.setupFunc != nil {
+				tt.setupFunc(storage)
+			}
+
+			handler := NewHandler(storage, cfg)
+			loggedHandler := logger.WithLogging(handler.DeleteUserURLsHandler, log)
+
+			body, err := json.Marshal(tt.body)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(tt.method, "/api/user/urls", bytes.NewReader(body))
+			if tt.userID != "" {
+				ctx := setUserIDToContext(req.Context(), tt.userID)
+				req = req.WithContext(ctx)
+			}
+			w := httptest.NewRecorder()
+
+			loggedHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+
+			// If deletion was successful, verify URLs are marked as deleted
+			if tt.wantStatus == http.StatusAccepted && len(tt.body) > 0 {
+				// Try to get the URLs - they should return ErrURLDeleted
+				for _, token := range tt.body {
+					_, err := storage.GetURL(token)
+					if err != nil {
+						assert.Equal(t, "url was deleted", err.Error())
+					}
+				}
 			}
 		})
 	}

@@ -9,7 +9,8 @@ import (
 
 // Common errors
 var (
-	ErrURLExists = errors.New("url already exists")
+	ErrURLExists  = errors.New("url already exists")
+	ErrURLDeleted = errors.New("url was deleted")
 )
 
 type StorageType int
@@ -32,6 +33,7 @@ type URLStorager interface {
 	AddURLBatch(urls map[string]string) error
 	GetTokenByURL(longURL string) (string, error)
 	GetUserURLs(userID string) ([]models.URLStorageNode, error)
+	DeleteURLs(userID string, tokens []string) error
 }
 
 // NewURLStorage creates a new storage instance based on type

@@ -72,6 +72,7 @@ func main() {
 	r.Post("/api/shorten/batch", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.APIEncodeBatchHandler)), log))
 	r.Get("/ping", logger.WithLogging(handler.PingHandler, log))
 	r.Get("/api/user/urls", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.GetUserURLsHandler)), log))
+	r.Delete("/api/user/urls", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.DeleteUserURLsHandler)), log))
 
 	log.Infow(
 		"Running server on",

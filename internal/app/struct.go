@@ -5,12 +5,14 @@ import (
 
 	"github.com/pcristin/urlshortener/internal/config"
 	"github.com/pcristin/urlshortener/internal/storage"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
 	storage storage.URLStorager
 	secret  string
 	baseURL string
+	logger  *zap.Logger
 }
 
 func NewHandler(storage storage.URLStorager, config *config.Options) HandlerInterface {
@@ -23,6 +25,7 @@ func NewHandler(storage storage.URLStorager, config *config.Options) HandlerInte
 		storage: storage,
 		secret:  secret,
 		baseURL: config.GetBaseURL(),
+		logger:  zap.L(),
 	}
 }
 

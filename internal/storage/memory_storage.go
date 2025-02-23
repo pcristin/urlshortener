@@ -40,6 +40,9 @@ func (ms *MemoryStorage) AddURL(token, longURL string, userID string) error {
 
 func (ms *MemoryStorage) GetURL(token string) (string, error) {
 	if node, ok := ms.Get(token); ok {
+		if node.IsDeleted {
+			return "", ErrURLDeleted
+		}
 		return node.OriginalURL, nil
 	}
 	return "", errors.New("URL not found")
@@ -94,4 +97,19 @@ func (ms *MemoryStorage) GetUserURLs(userID string) ([]models.URLStorageNode, er
 		}
 	}
 	return userURLs, nil
+}
+
+// DeleteURLs marks multiple URLs as deleted for a specific user
+func (ms *MemoryStorage) DeleteURLs(userID string, tokens []string) error {
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	for _, token := range tokens {
+		if node, ok := ms.Get(token); ok && node.UserID == userID {
+			node.IsDeleted = true
+			ms.Set(token, node)
+		}
+	}
+	return nil
 }
