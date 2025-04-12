@@ -16,7 +16,7 @@ func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{BaseStorage: NewBaseStorage()}
 }
 
-func (ms *MemoryStorage) AddURL(token, longURL string) error {
+func (ms *MemoryStorage) AddURL(token, longURL string, userID string) error {
 	if token == "" || longURL == "" {
 		return errors.New("token and URL cannot be empty")
 	}
@@ -32,6 +32,7 @@ func (ms *MemoryStorage) AddURL(token, longURL string) error {
 		UUID:        uuid.New(),
 		ShortURL:    token,
 		OriginalURL: longURL,
+		UserID:      userID,
 	}
 	ms.Set(token, node)
 	return nil
@@ -39,6 +40,9 @@ func (ms *MemoryStorage) AddURL(token, longURL string) error {
 
 func (ms *MemoryStorage) GetURL(token string) (string, error) {
 	if node, ok := ms.Get(token); ok {
+		if node.IsDeleted {
+			return "", ErrURLDeleted
+		}
 		return node.OriginalURL, nil
 	}
 	return "", errors.New("URL not found")
@@ -82,4 +86,30 @@ func (ms *MemoryStorage) GetTokenByURL(longURL string) (string, error) {
 		}
 	}
 	return "", errors.New("url not found")
+}
+
+// GetUserURLs returns all URLs shortened by a specific user
+func (ms *MemoryStorage) GetUserURLs(userID string) ([]models.URLStorageNode, error) {
+	var userURLs []models.URLStorageNode
+	for _, node := range ms.cache {
+		if node.UserID == userID {
+			userURLs = append(userURLs, node)
+		}
+	}
+	return userURLs, nil
+}
+
+// DeleteURLs marks multiple URLs as deleted for a specific user
+func (ms *MemoryStorage) DeleteURLs(userID string, tokens []string) error {
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	for _, token := range tokens {
+		if node, ok := ms.Get(token); ok && node.UserID == userID {
+			node.IsDeleted = true
+			ms.Set(token, node)
+		}
+	}
+	return nil
 }

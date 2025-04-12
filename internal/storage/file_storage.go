@@ -27,8 +27,8 @@ func NewFileStorage(filePath string) *FileStorage {
 	return fs
 }
 
-func (fs *FileStorage) AddURL(token, longURL string) error {
-	err := fs.MemoryStorage.AddURL(token, longURL)
+func (fs *FileStorage) AddURL(token, longURL string, userID string) error {
+	err := fs.MemoryStorage.AddURL(token, longURL, userID)
 	if err != nil {
 		return err
 	}
@@ -71,6 +71,9 @@ func (fs *FileStorage) appendToFile(node models.URLStorageNode) error {
 
 func (fs *FileStorage) GetURL(token string) (string, error) {
 	if node, ok := fs.Get(token); ok {
+		if node.IsDeleted {
+			return "", ErrURLDeleted
+		}
 		return node.OriginalURL, nil
 	}
 	return "", errors.New("URL not found")
@@ -168,4 +171,13 @@ func (fs *FileStorage) GetTokenByURL(longURL string) (string, error) {
 		}
 	}
 	return "", errors.New("url not found")
+}
+
+// DeleteURLs marks multiple URLs as deleted for a specific user
+func (fs *FileStorage) DeleteURLs(userID string, tokens []string) error {
+	err := fs.MemoryStorage.DeleteURLs(userID, tokens)
+	if err != nil {
+		return err
+	}
+	return fs.SaveToFile()
 }

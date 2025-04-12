@@ -25,7 +25,7 @@ func generateToken(length int) string {
 }
 
 // Encode URL to a range number from 6 to 9 of random characters
-func EncodeURL(url string, s storage.URLStorager) (string, error) {
+func EncodeURL(url string, s storage.URLStorager, userID string) (string, error) {
 	// First, check if the URL already exists
 	if token, err := s.GetTokenByURL(url); err == nil {
 		return token, storage.ErrURLExists
@@ -34,7 +34,8 @@ func EncodeURL(url string, s storage.URLStorager) (string, error) {
 	// If URL doesn't exist, generate a new token and add it
 	length := generateRandomNumber(6, 10)
 	token := generateToken(length)
-	err := s.AddURL(token, url)
+
+	err := s.AddURL(token, url, userID)
 	if err != nil {
 		// Handle any other errors
 		return "", err
