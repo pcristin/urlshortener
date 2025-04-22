@@ -3,8 +3,16 @@ package urlutils
 import (
 	randMath "math/rand/v2"
 	"regexp"
+	"sync"
 
 	"github.com/pcristin/urlshortener/internal/storage"
+)
+
+// Pre-compile the regexp pattern once for better performance
+var (
+	regExpURLPattern = regexp.MustCompile(`^((http|https):\/\/)?([a-zA-Z0-9.-]+(\.[a-zA-Z]{2,})+)(\/[a-zA-Z0-9-._~:?#@!$&'()*+,;=]*)?$`)
+	lettersMu        sync.Mutex
+	letters          = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
 )
 
 func DecodeURL(token string, storage storage.URLStorager) (string, error) {
@@ -16,11 +24,12 @@ func generateRandomNumber(a int, b int) int {
 }
 
 func generateToken(length int) string {
-	var letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
 	token := make([]byte, length)
+	lettersMu.Lock()
 	for i := range token {
 		token[i] = letters[randMath.IntN(len(letters))]
 	}
+	lettersMu.Unlock()
 	return string(token)
 }
 
@@ -43,9 +52,8 @@ func EncodeURL(url string, s storage.URLStorager, userID string) (string, error)
 	return token, nil
 }
 
-// Check the validity of provided URL address
+// Check the validity of provided URL address using the precompiled regexp
 func URLCheck(url string) bool {
-	var regExpURLPattern = regexp.MustCompile(`^((http|https):\/\/)?([a-zA-Z0-9.-]+(\.[a-zA-Z]{2,})+)(\/[a-zA-Z0-9-._~:?#@!$&'()*+,;=]*)?$`)
 	return regExpURLPattern.MatchString(url)
 }
 

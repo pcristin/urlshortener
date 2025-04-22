@@ -2,7 +2,12 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"runtime"
+	"runtime/pprof"
 	"time"
+
+	_ "net/http/pprof"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -17,6 +22,19 @@ import (
 )
 
 func main() {
+
+	fmem, err := os.Create("../../profiles/base.pprof")
+	if err != nil {
+		panic(err)
+	}
+	defer fmem.Close()
+
+	runtime.GC()
+
+	if err := pprof.WriteHeapProfile(fmem); err != nil {
+		panic(err)
+	}
+
 	// Initialize logger
 	log, err := logger.Initialize()
 

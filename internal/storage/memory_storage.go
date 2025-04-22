@@ -21,9 +21,17 @@ func (ms *MemoryStorage) AddURL(token, longURL string, userID string) error {
 		return errors.New("token and URL cannot be empty")
 	}
 
-	// Check if URL already exists
+	// Instead of always checking all existing URLs, first check if the token exists
+	// which is more efficient as a map lookup
+	if _, exists := ms.cache[token]; exists {
+		return errors.New("token already exists")
+	}
+
+	// Only check for duplicate URLs if we need to enforce uniqueness
+	// This is a costly operation, so we might want to make it configurable
+	// or skip it if performance is critical in the future
 	for _, node := range ms.cache {
-		if node.OriginalURL == longURL {
+		if node.OriginalURL == longURL && !node.IsDeleted {
 			return ErrURLExists
 		}
 	}
@@ -80,17 +88,17 @@ func (ms *MemoryStorage) AddURLBatch(urls map[string]string) error {
 
 // Gets a token by original URL from memory
 func (ms *MemoryStorage) GetTokenByURL(longURL string) (string, error) {
-	for _, node := range ms.cache {
-		if node.OriginalURL == longURL {
-			return node.ShortURL, nil
-		}
+	if token, ok := ms.BaseStorage.GetTokenByURL(longURL); ok {
+		return token, nil
 	}
 	return "", errors.New("url not found")
 }
 
 // GetUserURLs returns all URLs shortened by a specific user
 func (ms *MemoryStorage) GetUserURLs(userID string) ([]models.URLStorageNode, error) {
-	var userURLs []models.URLStorageNode
+	// Preallocate with a reasonable capacity to reduce allocations
+	userURLs := make([]models.URLStorageNode, 0, len(ms.cache)/4)
+
 	for _, node := range ms.cache {
 		if node.UserID == userID {
 			userURLs = append(userURLs, node)
