@@ -26,6 +26,7 @@ func main() {
 		panic("could not initialize logger")
 	}
 
+	// Flush logs
 	defer log.Sync()
 
 	// Initialize configuration and get server address from config
