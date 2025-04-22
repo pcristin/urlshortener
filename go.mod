@@ -1,6 +1,6 @@
 module github.com/pcristin/urlshortener
 
-go 1.22.12
+go 1.24.0
 
 require github.com/stretchr/testify v1.10.0
 
