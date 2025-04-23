@@ -7,12 +7,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// DatabaseManagerInterface defines the contract for database operations
 type DatabaseManagerInterface interface {
 	Ping(ctx context.Context) error
 	Close()
 	GetPool() *pgxpool.Pool
 }
 
+// DatabaseManager implements the DatabaseManagerInterface for PostgreSQL
 type DatabaseManager struct {
 	pool *pgxpool.Pool
 }

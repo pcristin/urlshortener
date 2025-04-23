@@ -8,14 +8,17 @@ import (
 	"github.com/pcristin/urlshortener/internal/models"
 )
 
+// MemoryStorage implements URLStorager interface with in-memory storage
 type MemoryStorage struct {
 	BaseStorage
 }
 
+// NewMemoryStorage creates a new in-memory storage instance
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{BaseStorage: NewBaseStorage()}
 }
 
+// AddURL adds a new URL to the in-memory storage
 func (ms *MemoryStorage) AddURL(token, longURL string, userID string) error {
 	if token == "" || longURL == "" {
 		return errors.New("token and URL cannot be empty")
@@ -46,6 +49,7 @@ func (ms *MemoryStorage) AddURL(token, longURL string, userID string) error {
 	return nil
 }
 
+// GetURL retrieves a URL by its token from in-memory storage
 func (ms *MemoryStorage) GetURL(token string) (string, error) {
 	if node, ok := ms.Get(token); ok {
 		if node.IsDeleted {
@@ -56,24 +60,30 @@ func (ms *MemoryStorage) GetURL(token string) (string, error) {
 	return "", errors.New("URL not found")
 }
 
+// SaveToFile is a no-op for memory storage
 func (ms *MemoryStorage) SaveToFile() error {
 	return nil
 }
 
+// LoadFromFile is a no-op for memory storage
 func (ms *MemoryStorage) LoadFromFile(filepath string) error {
 	return nil
 }
 
+// SetDBPool is a no-op for memory storage
 func (ms *MemoryStorage) SetDBPool(*pgxpool.Pool) {}
 
+// GetStorageType returns the type of storage (memory)
 func (ms *MemoryStorage) GetStorageType() StorageType {
 	return MemoryStorageType
 }
 
+// GetDBPool returns nil for memory storage
 func (ms *MemoryStorage) GetDBPool() *pgxpool.Pool {
 	return nil
 }
 
+// AddURLBatch adds multiple URLs to storage in a single operation
 func (ms *MemoryStorage) AddURLBatch(urls map[string]string) error {
 	for token, longURL := range urls {
 		node := models.URLStorageNode{
@@ -86,7 +96,7 @@ func (ms *MemoryStorage) AddURLBatch(urls map[string]string) error {
 	return nil
 }
 
-// Gets a token by original URL from memory
+// GetTokenByURL retrieves a token associated with a long URL
 func (ms *MemoryStorage) GetTokenByURL(longURL string) (string, error) {
 	if token, ok := ms.BaseStorage.GetTokenByURL(longURL); ok {
 		return token, nil

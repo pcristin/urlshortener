@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// Options holds configuration settings for the URL shortener service
 type Options struct {
 	serverURL       string
 	baseURL         string

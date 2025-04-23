@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// UserURL represents a shortened URL with its original URL for API responses
 type UserURL struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
