@@ -1,4 +1,4 @@
-package app_test
+package app
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"github.com/pcristin/urlshortener/internal/models"
 )
 
-func ExampleHandler_EncodeURLHandler() {
+func ExampleHandlerInterface_EncodeURLHandler() {
 	// This example demonstrates how to shorten a URL using the plain text endpoint
 
 	// The URL to be shortened
