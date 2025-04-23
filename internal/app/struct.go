@@ -8,6 +8,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// Handler implements the HandlerInterface and provides HTTP request handling functionality
+// for the URL shortener service. It manages URL storage, authentication, and URL construction.
 type Handler struct {
 	storage storage.URLStorager
 	secret  string
@@ -15,6 +17,9 @@ type Handler struct {
 	logger  *zap.Logger
 }
 
+// NewHandler creates a new Handler instance with the provided storage and configuration.
+// It initializes the handler with storage, secret key for authentication, base URL for shortened links,
+// and a logger instance.
 func NewHandler(storage storage.URLStorager, config *config.Options) HandlerInterface {
 	secret := config.GetSecret()
 	if secret == "" {

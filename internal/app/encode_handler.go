@@ -9,7 +9,14 @@ import (
 	uu "github.com/pcristin/urlshortener/internal/urlutils"
 )
 
-// Handler to encode URL with plain text and without compressing the data
+// EncodeURLHandler handles requests to shorten a URL.
+// It accepts the long URL in the request body as plain text and returns the shortened URL.
+// This handler supports HTTP POST requests only.
+//
+// If the URL already exists in the system, it returns the existing shortened URL with a 409 Conflict status.
+// If successful in creating a new shortened URL, it returns the shortened URL with a 201 Created status.
+//
+// The response is plain text containing the fully qualified shortened URL.
 func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(res, "bad request", http.StatusBadRequest)
