@@ -11,11 +11,13 @@ import (
 	"github.com/pcristin/urlshortener/internal/models"
 )
 
+// FileStorage implements URLStorager interface with file storage
 type FileStorage struct {
 	*MemoryStorage
 	filePath string
 }
 
+// NewFileStorage creates a new file storage instance
 func NewFileStorage(filePath string) *FileStorage {
 	fs := &FileStorage{
 		MemoryStorage: NewMemoryStorage(),
@@ -27,6 +29,7 @@ func NewFileStorage(filePath string) *FileStorage {
 	return fs
 }
 
+// AddURL adds a new URL to the file storage
 func (fs *FileStorage) AddURL(token, longURL string, userID string) error {
 	err := fs.MemoryStorage.AddURL(token, longURL, userID)
 	if err != nil {
@@ -38,6 +41,7 @@ func (fs *FileStorage) AddURL(token, longURL string, userID string) error {
 	return nil
 }
 
+// appendToFile appends a URL to the file storage
 func (fs *FileStorage) appendToFile(node models.URLStorageNode) error {
 	if fs.filePath == "" {
 		return nil
@@ -69,6 +73,7 @@ func (fs *FileStorage) appendToFile(node models.URLStorageNode) error {
 	return nil
 }
 
+// GetURL retrieves a URL from the file storage
 func (fs *FileStorage) GetURL(token string) (string, error) {
 	if node, ok := fs.Get(token); ok {
 		if node.IsDeleted {
@@ -79,6 +84,7 @@ func (fs *FileStorage) GetURL(token string) (string, error) {
 	return "", errors.New("URL not found")
 }
 
+// SaveToFile saves the file storage to a file
 func (fs *FileStorage) SaveToFile() error {
 	if fs.filePath == "" {
 		return nil
@@ -115,6 +121,7 @@ func (fs *FileStorage) SaveToFile() error {
 	return nil
 }
 
+// LoadFromFile loads the file storage from a file
 func (fs *FileStorage) LoadFromFile(filepath string) error {
 	fs.filePath = filepath
 
@@ -138,16 +145,20 @@ func (fs *FileStorage) LoadFromFile(filepath string) error {
 	return nil
 }
 
+// SetDBPool sets the database pool for the file storage
 func (fs *FileStorage) SetDBPool(*pgxpool.Pool) {}
 
+// GetStorageType returns the storage type for the file storage
 func (fs *FileStorage) GetStorageType() StorageType {
 	return FileStorageType
 }
 
+// GetDBPool returns nil for file storage
 func (fs *FileStorage) GetDBPool() *pgxpool.Pool {
 	return nil
 }
 
+// AddURLBatch adds multiple URLs to the file storage
 func (fs *FileStorage) AddURLBatch(urls map[string]string) error {
 	// First add to memory
 	err := fs.MemoryStorage.AddURLBatch(urls)

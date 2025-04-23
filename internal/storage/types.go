@@ -18,6 +18,7 @@ var (
 // StorageType defines the type of storage mechanism used for URL data
 type StorageType int
 
+// StorageType constants
 const (
 	// MemoryStorageType represents in-memory storage (volatile)
 	MemoryStorageType StorageType = iota
