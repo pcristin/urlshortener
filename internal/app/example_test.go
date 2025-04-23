@@ -210,7 +210,11 @@ func ExampleHandlerInterface_DecodeURLHandler() {
 			return http.ErrUseLastResponse
 		},
 	}
-	resp, _ := client.Get(ts.URL + "/" + token)
+	resp, err := client.Get(ts.URL + "/" + token)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		return
+	}
 	defer resp.Body.Close()
 
 	fmt.Printf("Status: %d\n", resp.StatusCode)
