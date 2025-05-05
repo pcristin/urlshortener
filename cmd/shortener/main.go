@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -19,11 +21,23 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		// Log the error before exiting
+		if logger, err := logger.Initialize(); err == nil {
+			logger.Errorw("application error", "error", err)
+			logger.Sync()
+		} else {
+			fmt.Printf("failed to initialize logger: %v, original error: %v\n", err, err)
+		}
+	}
+}
+
+// run encapsulates the main application logic and returns an error instead of exiting directly
+func run() error {
 	// Initialize logger
 	log, err := logger.Initialize()
-
 	if err != nil {
-		panic("could not initialize logger")
+		return fmt.Errorf("could not initialize logger: %w", err)
 	}
 
 	// Flush logs
@@ -35,7 +49,7 @@ func main() {
 
 	serverURL := config.GetServerURL()
 	if serverURL == "" {
-		log.Fatal("server address can not be empty!")
+		return errors.New("server address can not be empty")
 	}
 
 	// Determine storage type based on config
@@ -83,6 +97,8 @@ func main() {
 	)
 
 	if err := http.ListenAndServe(serverURL, r); err != nil {
-		log.Fatalf("error in ListenAndServe %v", err)
+		return fmt.Errorf("error in ListenAndServe: %w", err)
 	}
+
+	return nil
 }

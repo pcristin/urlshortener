@@ -11,6 +11,12 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	}
+}
+
+func run() error {
 	endpoint := "http://localhost:8080/"
 	// контейнер данных для запроса
 	data := url.Values{}
@@ -21,7 +27,7 @@ func main() {
 	// читаем строку из консоли
 	long, err := reader.ReadString('\n')
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to read input: %w", err)
 	}
 	long = strings.TrimSuffix(long, "\n")
 	// заполняем контейнер данными
@@ -33,14 +39,14 @@ func main() {
 	// тело должно быть источником потокового чтения io.Reader
 	request, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(data.Encode()))
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 	// в заголовках запроса указываем кодировку
 	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	// отправляем запрос и получаем ответ
 	response, err := client.Do(request)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to send request: %w", err)
 	}
 	// выводим код ответа
 	fmt.Println("Статус-код ", response.Status)
@@ -48,8 +54,10 @@ func main() {
 	// читаем поток из тела ответа
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to read response body: %w", err)
 	}
 	// и печатаем его
 	fmt.Println(string(body))
+
+	return nil
 }
