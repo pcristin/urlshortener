@@ -1,6 +1,6 @@
 module github.com/pcristin/urlshortener
 
-go 1.22.10
+go 1.24.0
 
 require github.com/stretchr/testify v1.10.0
 
@@ -21,6 +21,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect

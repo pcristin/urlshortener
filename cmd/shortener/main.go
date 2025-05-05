@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	_ "net/http/pprof"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -24,6 +26,7 @@ func main() {
 		panic("could not initialize logger")
 	}
 
+	// Flush logs
 	defer log.Sync()
 
 	// Initialize configuration and get server address from config

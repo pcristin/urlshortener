@@ -169,6 +169,7 @@ func (ds *DatabaseStorage) GetDBPool() *pgxpool.Pool {
 	return ds.dbPool
 }
 
+// AddURLBatch adds multiple URLs to the database in a single transaction
 func (ds *DatabaseStorage) AddURLBatch(urls map[string]string) error {
 	if ds.dbPool == nil {
 		return errors.New("database not initialized")
