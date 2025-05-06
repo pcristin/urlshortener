@@ -20,6 +20,12 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
 	if err := run(); err != nil {
 		// Log the error before exiting
@@ -34,6 +40,10 @@ func main() {
 
 // run encapsulates the main application logic and returns an error instead of exiting directly
 func run() error {
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
+
 	// Initialize logger
 	log, err := logger.Initialize()
 	if err != nil {
