@@ -12,26 +12,32 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	}
+}
+
+func run() error {
 	// Create profiles directory if it doesn't exist
 	profilesDir := "../../profiles"
 	if _, err := os.Stat(profilesDir); os.IsNotExist(err) {
 		if err := os.Mkdir(profilesDir, 0755); err != nil {
-			panic(fmt.Sprintf("Failed to create profiles directory: %v", err))
+			return fmt.Errorf("failed to create profiles directory: %w", err)
 		}
 	}
 
 	// Run benchmarks and create memory profile
-	runBenchmarksAndProfile(filepath.Join(profilesDir, "result.pprof"))
+	return runBenchmarksAndProfile(filepath.Join(profilesDir, "result.pprof"))
 }
 
-func runBenchmarksAndProfile(profilePath string) {
+func runBenchmarksAndProfile(profilePath string) error {
 	// Force garbage collection before profiling
 	runtime.GC()
 
 	// Create profile file
 	f, err := os.Create(profilePath)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create profile file: %v", err))
+		return fmt.Errorf("failed to create profile file: %w", err)
 	}
 	defer f.Close()
 
@@ -61,8 +67,9 @@ func runBenchmarksAndProfile(profilePath string) {
 
 	// Write heap profile
 	if err := pprof.WriteHeapProfile(f); err != nil {
-		panic(fmt.Sprintf("Failed to write heap profile: %v", err))
+		return fmt.Errorf("failed to write heap profile: %w", err)
 	}
 
 	fmt.Printf("Memory profile written to %s\n", profilePath)
+	return nil
 }

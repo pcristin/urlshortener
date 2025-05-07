@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -18,12 +20,34 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
+	if err := run(); err != nil {
+		// Log the error before exiting
+		if logger, err := logger.Initialize(); err == nil {
+			logger.Errorw("application error", "error", err)
+			logger.Sync()
+		} else {
+			fmt.Printf("logger error: %v, original error: %v\n", err, err)
+		}
+	}
+}
+
+// run encapsulates the main application logic and returns an error instead of exiting directly
+func run() error {
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
+
 	// Initialize logger
 	log, err := logger.Initialize()
-
 	if err != nil {
-		panic("could not initialize logger")
+		return fmt.Errorf("logger error | failed to initialize logger: %w", err)
 	}
 
 	// Flush logs
@@ -35,7 +59,7 @@ func main() {
 
 	serverURL := config.GetServerURL()
 	if serverURL == "" {
-		log.Fatal("server address can not be empty!")
+		return errors.New("configuration error | server address can not be empty")
 	}
 
 	// Determine storage type based on config
@@ -47,7 +71,7 @@ func main() {
 		zap.L().Sugar().Infow("Database config", "databaseDSN", databaseDSN)
 		dbManager, err := database.NewDatabaseManager(databaseDSN)
 		if err != nil {
-			log.Warnf("Failed to connect to database: %v", err)
+			log.Warnf("database error | failed to connect to database: %v", err)
 		} else {
 			storageType = storage.DatabaseStorageType
 			dbPool = dbManager.GetPool()
@@ -83,6 +107,8 @@ func main() {
 	)
 
 	if err := http.ListenAndServe(serverURL, r); err != nil {
-		log.Fatalf("error in ListenAndServe %v", err)
+		return fmt.Errorf("server error | failed to listen and serve: %w", err)
 	}
+
+	return nil
 }
