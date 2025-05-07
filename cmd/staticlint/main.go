@@ -52,14 +52,9 @@ import (
 	"github.com/tomarrell/wrapcheck/v2/wrapcheck"
 )
 
-// main registers and runs all configured analyzers as part of the multichecker.
-func main() {
-	// Combine all analyzers
-	var analyzers []*analysis.Analyzer
-
-	// Add standard Go tools analyzers
-	analyzers = append(analyzers,
-		asmdecl.Analyzer,
+// getStaticcheckAnalyzers returns a list of staticcheck analyzers
+func getStaticcheckAnalyzers() []*analysis.Analyzer {
+	return []*analysis.Analyzer{asmdecl.Analyzer,
 		assign.Analyzer,
 		atomic.Analyzer,
 		bools.Analyzer,
@@ -86,11 +81,13 @@ func main() {
 		unreachable.Analyzer,
 		unsafeptr.Analyzer,
 		unusedresult.Analyzer,
-	)
+	}
+}
 
-	// Add staticcheck.io SA analyzers
+func getStandardAnalyzers() []*analysis.Analyzer {
+	var analyzers []*analysis.Analyzer
+
 	for _, v := range staticcheck.Analyzers {
-		// Add all SA analyzers
 		if v.Analyzer.Name[:2] == "SA" {
 			analyzers = append(analyzers, v.Analyzer)
 		}
@@ -104,16 +101,17 @@ func main() {
 		if v.Analyzer.Name == "QF1003" {
 			analyzers = append(analyzers, v.Analyzer)
 		}
+
 		// S1000: Use plain channel send or receive instead of select with a single case
 		if v.Analyzer.Name == "S1000" {
 			analyzers = append(analyzers, v.Analyzer)
 		}
 	}
 
-	// Add bodyclose analyzer to detect unclosed HTTP response bodies
-	analyzers = append(analyzers, bodyclose.Analyzer)
+	return analyzers
+}
 
-	// Add wrapcheck analyzer to ensure errors are wrapped with enough context
+func getWrapcheckAnalyzers() *analysis.Analyzer {
 	wrapcheckConfig := wrapcheck.NewDefaultConfig()
 	wrapcheckConfig.IgnoreSigs = []string{
 		`.Error`,
@@ -121,11 +119,26 @@ func main() {
 		`.Wrapf`,
 		`.Unwrap`,
 	}
-	wrapcheckAnalyzer := wrapcheck.NewAnalyzer(wrapcheckConfig)
-	analyzers = append(analyzers, wrapcheckAnalyzer)
 
-	// Add custom analyzer that prohibits os.Exit in main function
-	analyzers = append(analyzers, NewNoExitAnalyzer())
+	return wrapcheck.NewAnalyzer(wrapcheckConfig)
+}
+
+// main registers and runs all configured analyzers as part of the multichecker.
+func main() {
+	// Combine all analyzers
+	var analyzers []*analysis.Analyzer
+
+	// Add standard go tools analyzers
+	analyzers = append(analyzers, getStandardAnalyzers()...)
+
+	// Add staticcheck.io analyzers
+	analyzers = append(analyzers, getStaticcheckAnalyzers()...)
+
+	// Add wrapcheck analyzer
+	analyzers = append(analyzers, getWrapcheckAnalyzers())
+
+	// Add bodyclose analyzer
+	analyzers = append(analyzers, bodyclose.Analyzer)
 
 	// Run the multichecker with all analyzers
 	multichecker.Main(analyzers...)

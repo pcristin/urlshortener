@@ -33,7 +33,7 @@ func main() {
 			logger.Errorw("application error", "error", err)
 			logger.Sync()
 		} else {
-			fmt.Printf("failed to initialize logger: %v, original error: %v\n", err, err)
+			fmt.Printf("logger error: %v, original error: %v\n", err, err)
 		}
 	}
 }
@@ -47,7 +47,7 @@ func run() error {
 	// Initialize logger
 	log, err := logger.Initialize()
 	if err != nil {
-		return fmt.Errorf("could not initialize logger: %w", err)
+		return fmt.Errorf("logger error | failed to initialize logger: %w", err)
 	}
 
 	// Flush logs
@@ -59,7 +59,7 @@ func run() error {
 
 	serverURL := config.GetServerURL()
 	if serverURL == "" {
-		return errors.New("server address can not be empty")
+		return errors.New("configuration error | server address can not be empty")
 	}
 
 	// Determine storage type based on config
@@ -71,7 +71,7 @@ func run() error {
 		zap.L().Sugar().Infow("Database config", "databaseDSN", databaseDSN)
 		dbManager, err := database.NewDatabaseManager(databaseDSN)
 		if err != nil {
-			log.Warnf("Failed to connect to database: %v", err)
+			log.Warnf("database error | failed to connect to database: %v", err)
 		} else {
 			storageType = storage.DatabaseStorageType
 			dbPool = dbManager.GetPool()
@@ -107,7 +107,7 @@ func run() error {
 	)
 
 	if err := http.ListenAndServe(serverURL, r); err != nil {
-		return fmt.Errorf("error in ListenAndServe: %w", err)
+		return fmt.Errorf("server error | failed to listen and serve: %w", err)
 	}
 
 	return nil
