@@ -17,6 +17,7 @@ import (
 	"github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
 	"github.com/pcristin/urlshortener/internal/storage"
+	"github.com/pcristin/urlshortener/internal/tls"
 	"go.uber.org/zap"
 )
 
@@ -106,8 +107,22 @@ func run() error {
 		"address", serverURL,
 	)
 
-	if err := http.ListenAndServe(serverURL, r); err != nil {
-		return fmt.Errorf("server error | failed to listen and serve: %w", err)
+	if config.GetEnableHTTPS() {
+		certManager := tls.GetTLSManager()
+		log.Infow("Running server on", "address", serverURL, "https", "true")
+		server := &http.Server{
+			Addr:      ":443",
+			Handler:   r,
+			TLSConfig: certManager.TLSConfig(),
+		}
+		if err := server.ListenAndServeTLS("", ""); err != nil {
+			return fmt.Errorf("server error | failed to listen and serve: %w", err)
+		}
+	} else {
+		log.Infow("Running server on", "address", serverURL, "https", "false")
+		if err := http.ListenAndServe(serverURL, r); err != nil {
+			return fmt.Errorf("server error | failed to listen and serve: %w", err)
+		}
 	}
 
 	return nil

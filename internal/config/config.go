@@ -12,6 +12,7 @@ type Options struct {
 	pathToSavedData string
 	databaseDSN     string
 	secret          string
+	enableHTTPS     bool
 }
 
 // NewOptions creates a new Options instance
@@ -22,6 +23,7 @@ func NewOptions() *Options {
 		pathToSavedData: "saved_data.json",
 		databaseDSN:     "",
 		secret:          "",
+		enableHTTPS:     false,
 	}
 }
 
@@ -31,6 +33,7 @@ func (o *Options) ParseFlags() {
 	flag.StringVar(&o.baseURL, "b", o.baseURL, "server url and short url path to redirect")
 	flag.StringVar(&o.pathToSavedData, "f", o.pathToSavedData, "path to json file with saved data")
 	flag.StringVar(&o.databaseDSN, "d", o.databaseDSN, "string of db connection params")
+	flag.BoolVar(&o.enableHTTPS, "s", o.enableHTTPS, "enable https")
 
 	flag.Parse()
 
@@ -58,6 +61,10 @@ func (o *Options) LoadEnvVariables() {
 	if valueSecret, foundSecret := os.LookupEnv("SECRET_URL_SERVICE"); foundSecret && valueSecret != "" {
 		o.secret = os.Getenv("SECRET_URL_SERVICE")
 	}
+
+	if valueEnableHTTPS, foundEnableHTTPS := os.LookupEnv("ENABLE_HTTPS"); foundEnableHTTPS && valueEnableHTTPS != "" {
+		o.enableHTTPS = os.Getenv("ENABLE_HTTPS") == "true"
+	}
 }
 
 // GetServerURL returns the server URL
@@ -83,4 +90,9 @@ func (o *Options) GetDatabaseDSN() string {
 // GetSecret returns the secret key for URL service
 func (o *Options) GetSecret() string {
 	return o.secret
+}
+
+// GetEnableHTTPS returns the enable HTTPS flag
+func (o *Options) GetEnableHTTPS() bool {
+	return o.enableHTTPS
 }
