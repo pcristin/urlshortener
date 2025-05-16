@@ -113,7 +113,7 @@ func run() error {
 
 	// Initialize server
 	server := &http.Server{
-		Addr:    ":443",
+		Addr:    serverURL,
 		Handler: r,
 	}
 
@@ -130,25 +130,33 @@ func run() error {
 	// Goroutine for graceful shutdown
 	go func() {
 		<-sigint
+		log.Infow("server shutting down...")
 		if err := server.Shutdown(context.Background()); err != nil {
 			log.Infow("server error | HTTP server shutdown error", "error", err)
 		}
 		close(idleConnsClosed)
 	}()
 
-	if config.GetEnableHTTPS() {
-		certManager := tls.GetTLSManager()
-		log.Infow("Running server on", "address", serverURL, "https", "true")
-		server.TLSConfig = certManager.TLSConfig()
-		if err := server.ListenAndServeTLS("", ""); err != nil {
-			return fmt.Errorf("server error | failed to listen and serve: %w", err)
+	// Start server in a goroutine to allow graceful shutdown
+	go func() {
+		if config.GetEnableHTTPS() {
+			certManager := tls.GetTLSManager()
+			log.Infow("Running server on", "address", serverURL, "https", "true")
+			server.TLSConfig = certManager.TLSConfig()
+			if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Errorw("server error", "error", err)
+				// Signal shutdown if server fails to start
+				sigint <- syscall.SIGTERM
+			}
+		} else {
+			log.Infow("Running server on", "address", serverURL, "https", "false")
+			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Errorw("server error", "error", err)
+				// Signal shutdown if server fails to start
+				sigint <- syscall.SIGTERM
+			}
 		}
-	} else {
-		log.Infow("Running server on", "address", serverURL, "https", "false")
-		if err := http.ListenAndServe(serverURL, r); err != nil {
-			return fmt.Errorf("server error | failed to listen and serve: %w", err)
-		}
-	}
+	}()
 
 	// Wait for all connections to be closed
 	<-idleConnsClosed
