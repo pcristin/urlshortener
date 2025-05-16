@@ -47,6 +47,7 @@ func (o *Options) ParseFlags() {
 	flag.StringVar(&o.pathToSavedData, "f", o.pathToSavedData, "path to json file with saved data")
 	flag.StringVar(&o.databaseDSN, "d", o.databaseDSN, "string of db connection params")
 	flag.BoolVar(&o.enableHTTPS, "s", o.enableHTTPS, "enable https")
+	flag.StringVar(&o.config, "c", o.config, "path to config file")
 
 	flag.Parse()
 
@@ -60,15 +61,7 @@ func (o *Options) LoadEnvVariables() {
 		o.config = os.Getenv("CONFIG")
 	}
 	if o.config != "" {
-		jsonFile, err := os.ReadFile(o.config)
-		if err != nil {
-			log.Fatalf("yamlFile.Get err #%v ", err)
-		}
-		var configFile ConfigFile
-		err = json.Unmarshal(jsonFile, &configFile)
-		if err != nil {
-			log.Fatalf("Unmarshal: %v", err)
-		}
+		o.ParseConfigJSONFile()
 	}
 
 	if valueEnvServerURL, foundEnvServerURL := os.LookupEnv("SERVER_ADDRESS"); foundEnvServerURL && valueEnvServerURL != "" {
