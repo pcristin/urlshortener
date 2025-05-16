@@ -1,8 +1,11 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
+	"log"
 	"os"
+	"strconv"
 )
 
 // Options holds configuration settings for the URL shortener service
@@ -13,6 +16,15 @@ type Options struct {
 	databaseDSN     string
 	secret          string
 	enableHTTPS     bool
+	config          string
+}
+
+type ConfigFile struct {
+	ServerURL       string `json:"server_address"`
+	BaseURL         string `json:"base_url"`
+	FileStorageData string `json:"file_storage_data"`
+	DatabaseDSN     string `json:"database_dsn"`
+	EnableHTTPS     bool   `json:"enable_https"`
 }
 
 // NewOptions creates a new Options instance
@@ -24,6 +36,7 @@ func NewOptions() *Options {
 		databaseDSN:     "",
 		secret:          "",
 		enableHTTPS:     false,
+		config:          "",
 	}
 }
 
@@ -42,6 +55,22 @@ func (o *Options) ParseFlags() {
 
 // LoadEnvVariables loads configuration from environment variables
 func (o *Options) LoadEnvVariables() {
+
+	if valueConfig, foundConfig := os.LookupEnv("CONFIG"); foundConfig && valueConfig != "" {
+		o.config = os.Getenv("CONFIG")
+	}
+	if o.config != "" {
+		jsonFile, err := os.ReadFile(o.config)
+		if err != nil {
+			log.Fatalf("yamlFile.Get err #%v ", err)
+		}
+		var configFile ConfigFile
+		err = json.Unmarshal(jsonFile, &configFile)
+		if err != nil {
+			log.Fatalf("Unmarshal: %v", err)
+		}
+	}
+
 	if valueEnvServerURL, foundEnvServerURL := os.LookupEnv("SERVER_ADDRESS"); foundEnvServerURL && valueEnvServerURL != "" {
 		o.serverURL = os.Getenv("SERVER_ADDRESS")
 	}
@@ -65,6 +94,26 @@ func (o *Options) LoadEnvVariables() {
 	if valueEnableHTTPS, foundEnableHTTPS := os.LookupEnv("ENABLE_HTTPS"); foundEnableHTTPS && valueEnableHTTPS != "" {
 		o.enableHTTPS = os.Getenv("ENABLE_HTTPS") == "true"
 	}
+}
+
+// ParseConfigJSONFile parses the config file into ENV variables
+func (o *Options) ParseConfigJSONFile() {
+	var configFile ConfigFile
+	jsonFile, err := os.ReadFile(o.config)
+	if err != nil {
+		log.Fatalf("yamlFile.Get err #%v ", err)
+	}
+	err = json.Unmarshal(jsonFile, &configFile)
+	if err != nil {
+		log.Fatalf("Unmarshal: %v", err)
+	}
+
+	// Set ENV based on config file
+	os.Setenv("SERVER_ADDRESS", configFile.ServerURL)
+	os.Setenv("BASE_URL", configFile.BaseURL)
+	os.Setenv("FILE_STORAGE_PATH", configFile.FileStorageData)
+	os.Setenv("DATABASE_DSN", configFile.DatabaseDSN)
+	os.Setenv("ENABLE_HTTPS", strconv.FormatBool(configFile.EnableHTTPS))
 }
 
 // GetServerURL returns the server URL
