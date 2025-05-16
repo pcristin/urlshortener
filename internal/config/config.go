@@ -19,6 +19,7 @@ type Options struct {
 	config          string
 }
 
+// ConfigFile holds the configuration settings for the URL shortener service with JSON serialization
 type ConfigFile struct {
 	ServerURL       string `json:"server_address"`
 	BaseURL         string `json:"base_url"`
