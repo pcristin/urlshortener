@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "net/http/pprof"
@@ -107,14 +111,35 @@ func run() error {
 		"address", serverURL,
 	)
 
+	// Initialize server
+	server := &http.Server{
+		Addr:    ":443",
+		Handler: r,
+	}
+
+	// Graceful shutdown implementation
+	// This channel is used to notify the main goroutine that connections are closed
+	idleConnsClosed := make(chan struct{})
+
+	// Channel for notify about server shutdown
+	sigint := make(chan os.Signal, 1)
+
+	// Register the channel to receive SIGINT and SIGTERM signals
+	signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	// Goroutine for graceful shutdown
+	go func() {
+		<-sigint
+		if err := server.Shutdown(context.Background()); err != nil {
+			log.Infow("server error | HTTP server shutdown error", "error", err)
+		}
+		close(idleConnsClosed)
+	}()
+
 	if config.GetEnableHTTPS() {
 		certManager := tls.GetTLSManager()
 		log.Infow("Running server on", "address", serverURL, "https", "true")
-		server := &http.Server{
-			Addr:      ":443",
-			Handler:   r,
-			TLSConfig: certManager.TLSConfig(),
-		}
+		server.TLSConfig = certManager.TLSConfig()
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			return fmt.Errorf("server error | failed to listen and serve: %w", err)
 		}
@@ -124,6 +149,11 @@ func run() error {
 			return fmt.Errorf("server error | failed to listen and serve: %w", err)
 		}
 	}
+
+	// Wait for all connections to be closed
+	<-idleConnsClosed
+
+	log.Infow("server stopped")
 
 	return nil
 }
