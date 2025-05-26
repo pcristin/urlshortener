@@ -28,4 +28,7 @@ type HandlerInterface interface {
 
 	// AuthMiddleware provides authentication and user identification functionality
 	AuthMiddleware(http.HandlerFunc) http.HandlerFunc
+
+	// StatsHandler returns the stats of the URL shortener service
+	StatsHandler(http.ResponseWriter, *http.Request)
 }

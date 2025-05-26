@@ -131,3 +131,16 @@ func (ms *MemoryStorage) DeleteURLs(userID string, tokens []string) error {
 	}
 	return nil
 }
+
+// GetStats returns the stats of the URL shortener service
+func (ms *MemoryStorage) GetStats() (models.Stats, error) {
+	users := make(map[string]bool)
+	for _, node := range ms.cache {
+		users[node.UserID] = true
+	}
+
+	return models.Stats{
+		URLs:  len(ms.cache),
+		Users: len(users),
+	}, nil
+}

@@ -287,3 +287,33 @@ func (ds *DatabaseStorage) DeleteURLs(userID string, tokens []string) error {
 
 	return nil
 }
+
+// GetStats returns the stats of the URL shortener service
+func (ds *DatabaseStorage) GetStats() (models.Stats, error) {
+	usersRows, err := ds.dbPool.Query(context.Background(), "SELECT COUNT(DISTINCT user_id) FROM urls")
+	if err != nil {
+		return models.Stats{}, err
+	}
+	defer usersRows.Close()
+
+	var users int
+	if usersRows.Next() {
+		err = usersRows.Scan(&users)
+		if err != nil {
+			return models.Stats{}, err
+		}
+	}
+
+	urlsRows, err := ds.dbPool.Query(context.Background(), "SELECT COUNT(*) FROM urls")
+	if err != nil {
+		return models.Stats{}, err
+	}
+	defer urlsRows.Close()
+
+	var urls int
+
+	return models.Stats{
+		URLs:  urls,
+		Users: users,
+	}, nil
+}

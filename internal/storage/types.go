@@ -62,6 +62,9 @@ type URLStorager interface {
 
 	// DeleteURLs marks the specified URLs as deleted for a given user
 	DeleteURLs(userID string, tokens []string) error
+
+	// GetStats returns the stats of the URL shortener service
+	GetStats() (models.Stats, error)
 }
 
 // NewURLStorage creates a new storage instance based on type
