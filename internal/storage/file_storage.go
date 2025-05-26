@@ -192,3 +192,16 @@ func (fs *FileStorage) DeleteURLs(userID string, tokens []string) error {
 	}
 	return fs.SaveToFile()
 }
+
+// GetStats returns the stats of the URL shortener service
+func (fs *FileStorage) GetStats() (models.Stats, error) {
+	users := make(map[string]bool)
+	for _, node := range fs.cache {
+		users[node.UserID] = true
+	}
+
+	return models.Stats{
+		URLs:  len(fs.cache),
+		Users: len(users),
+	}, nil
+}

@@ -12,3 +12,10 @@ type URLStorageNode struct {
 	UserID      string    `json:"user_id"`      // ID of the user who created this URL
 	IsDeleted   bool      `json:"is_deleted"`   // Whether this URL has been marked as deleted
 }
+
+// Stats represents the statistics of the URL shortener service.
+// It contains the number of URLs and users.
+type Stats struct {
+	URLs  int `json:"urls"`  // Total number of URLs in the system
+	Users int `json:"users"` // Total number of users in the systemcommand not found: easyjson
+}

@@ -35,6 +35,7 @@ const (
 func setupTestConfig() *config.Options {
 	cfg := config.NewOptions()
 	os.Setenv("SECRET_URL_SERVICE", testSecret)
+	os.Setenv("TRUSTED_SUBNET", "127.0.0.0/24")
 	// Don't parse flags in tests to avoid flag redefinition
 	cfg.LoadEnvVariables()
 	return cfg
@@ -196,6 +197,18 @@ func (m *MockStorage) DeleteURLs(userID string, tokens []string) error {
 		}
 	}
 	return nil
+}
+
+func (m *MockStorage) GetStats() (mod.Stats, error) {
+	users := make(map[string]bool)
+	for _, node := range m.urls {
+		users[node.UserID] = true
+	}
+
+	return mod.Stats{
+		URLs:  len(m.urls),
+		Users: len(users),
+	}, nil
 }
 
 func TestEncodeURLHandler(t *testing.T) {
@@ -815,6 +828,87 @@ func TestDeleteUserURLsHandler(t *testing.T) {
 						assert.Equal(t, "url was deleted", err.Error())
 					}
 				}
+			}
+		})
+	}
+}
+
+// TestStatsHandler tests the StatsHandler function
+func TestStatsHandler(t *testing.T) {
+	log, err := logger.Initialize()
+	require.NoError(t, err)
+	defer log.Sync()
+
+	cfg := setupTestConfig()
+
+	tests := []struct {
+		name       string
+		method     string
+		userID     string
+		body       []string
+		setupFunc  func(*MockStorage)
+		realIP     string
+		wantStatus int
+		wantURLs   int
+		wantUsers  int
+	}{
+		{
+			name:   "valid stats",
+			method: http.MethodGet,
+			userID: "user1",
+			body:   []string{"abc123", "def456"},
+			setupFunc: func(s *MockStorage) {
+				_ = s.AddURL("abc123", "https://google.com", "user1")
+				_ = s.AddURL("def456", "https://yandex.ru", "user1")
+			},
+			realIP:     "127.0.0.8",
+			wantStatus: http.StatusOK,
+			wantURLs:   2,
+			wantUsers:  1,
+		},
+		{
+			name:       "invalid trusted subnet",
+			method:     http.MethodGet,
+			userID:     "user1",
+			realIP:     "8.8.8.8",
+			wantStatus: http.StatusForbidden,
+			wantURLs:   0,
+			wantUsers:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := NewMockStorage(storage.MemoryStorageType)
+			if tt.setupFunc != nil {
+				tt.setupFunc(storage)
+			}
+			handler := NewHandler(storage, cfg)
+			loggedHandler := logger.WithLogging(handler.StatsHandler, log)
+
+			req := httptest.NewRequest(tt.method, "/api/internal/stats", nil)
+			req.Header.Set("X-Real-IP", tt.realIP)
+			if tt.userID != "" {
+				ctx := setUserIDToContext(req.Context(), tt.userID)
+				req = req.WithContext(ctx)
+			}
+
+			w := httptest.NewRecorder()
+			loggedHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+
+			if resp.StatusCode == http.StatusOK {
+				respStats := mod.Stats{}
+				err = easyjson.UnmarshalFromReader(resp.Body, &respStats)
+				require.NoError(t, err)
+
+				assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+				assert.Equal(t, tt.wantURLs, respStats.URLs)
+				assert.Equal(t, tt.wantUsers, respStats.Users)
 			}
 		})
 	}
