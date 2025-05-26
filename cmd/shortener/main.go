@@ -20,7 +20,7 @@ import (
 	"github.com/pcristin/urlshortener/internal/database"
 	"github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
-	"github.com/pcristin/urlshortener/internal/my_tls"
+	"github.com/pcristin/urlshortener/internal/mytls"
 	"github.com/pcristin/urlshortener/internal/storage"
 	"go.uber.org/zap"
 )
@@ -141,7 +141,7 @@ func run() error {
 	// Start server in a goroutine to allow graceful shutdown
 	go func() {
 		if config.GetEnableHTTPS() {
-			certManager := my_tls.GetTLSManager()
+			certManager := mytls.GetTLSManager()
 			log.Infow("Running server on", "address", serverURL, "https", "true")
 			server.TLSConfig = certManager.TLSConfig()
 			if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
