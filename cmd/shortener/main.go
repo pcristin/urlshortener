@@ -20,8 +20,8 @@ import (
 	"github.com/pcristin/urlshortener/internal/database"
 	"github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
+	"github.com/pcristin/urlshortener/internal/my_tls"
 	"github.com/pcristin/urlshortener/internal/storage"
-	"github.com/pcristin/urlshortener/internal/tls"
 	"go.uber.org/zap"
 )
 
@@ -105,6 +105,7 @@ func run() error {
 	r.Get("/ping", logger.WithLogging(handler.PingHandler, log))
 	r.Get("/api/user/urls", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.GetUserURLsHandler)), log))
 	r.Delete("/api/user/urls", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.DeleteUserURLsHandler)), log))
+	r.Get("/api/internal/stats", logger.WithLogging(gzip.GzipMiddleware(handler.StatsHandler), log))
 
 	log.Infow(
 		"Running server on",
@@ -140,7 +141,7 @@ func run() error {
 	// Start server in a goroutine to allow graceful shutdown
 	go func() {
 		if config.GetEnableHTTPS() {
-			certManager := tls.GetTLSManager()
+			certManager := my_tls.GetTLSManager()
 			log.Infow("Running server on", "address", serverURL, "https", "true")
 			server.TLSConfig = certManager.TLSConfig()
 			if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
