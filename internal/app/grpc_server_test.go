@@ -46,8 +46,9 @@ func setupGRPCTest(t *testing.T) (*grpc.Server, proto.URLShortenerServiceClient,
 	}()
 
 	// Create client
-	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient("passthrough://bufnet",
+		grpc.WithContextDialer(bufDialer),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
 	client := proto.NewURLShortenerServiceClient(conn)
