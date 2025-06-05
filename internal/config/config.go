@@ -18,6 +18,8 @@ type Options struct {
 	enableHTTPS     bool
 	config          string
 	trustedSubnet   string
+	grpcURL         string
+	enableGRPCTLS   bool
 }
 
 // ConfigFile holds the configuration settings for the URL shortener service with JSON serialization
@@ -28,6 +30,8 @@ type ConfigFile struct {
 	DatabaseDSN     string `json:"database_dsn"`
 	EnableHTTPS     bool   `json:"enable_https"`
 	TrustedSubnet   string `json:"trusted_subnet"`
+	GRPCURL         string `json:"grpc_address"`
+	EnableGRPCTLS   bool   `json:"enable_grpc_tls"`
 }
 
 // NewOptions creates a new Options instance
@@ -41,6 +45,8 @@ func NewOptions() *Options {
 		enableHTTPS:     false,
 		config:          "",
 		trustedSubnet:   "",
+		grpcURL:         "localhost:50051",
+		enableGRPCTLS:   false,
 	}
 }
 
@@ -53,6 +59,8 @@ func (o *Options) ParseFlags() {
 	flag.BoolVar(&o.enableHTTPS, "s", o.enableHTTPS, "enable https")
 	flag.StringVar(&o.config, "c", o.config, "path to config file")
 	flag.StringVar(&o.trustedSubnet, "t", o.trustedSubnet, "trusted subnet")
+	flag.StringVar(&o.grpcURL, "g", o.grpcURL, "address and port to run gRPC server")
+	flag.BoolVar(&o.enableGRPCTLS, "gs", o.enableGRPCTLS, "enable TLS for gRPC")
 	flag.Parse()
 
 	o.LoadEnvVariables()
@@ -95,6 +103,14 @@ func (o *Options) LoadEnvVariables() {
 	if valueTrustedSubnet, foundTrustedSubnet := os.LookupEnv("TRUSTED_SUBNET"); foundTrustedSubnet && valueTrustedSubnet != "" {
 		o.trustedSubnet = os.Getenv("TRUSTED_SUBNET")
 	}
+
+	if valueGRPCURL, foundGRPCURL := os.LookupEnv("GRPC_ADDRESS"); foundGRPCURL && valueGRPCURL != "" {
+		o.grpcURL = os.Getenv("GRPC_ADDRESS")
+	}
+
+	if valueEnableGRPCTLS, foundEnableGRPCTLS := os.LookupEnv("ENABLE_GRPC_TLS"); foundEnableGRPCTLS && valueEnableGRPCTLS != "" {
+		o.enableGRPCTLS = os.Getenv("ENABLE_GRPC_TLS") == "true"
+	}
 }
 
 // ParseConfigJSONFile parses the config file into ENV variables
@@ -116,6 +132,8 @@ func (o *Options) ParseConfigJSONFile() {
 	os.Setenv("DATABASE_DSN", configFile.DatabaseDSN)
 	os.Setenv("ENABLE_HTTPS", strconv.FormatBool(configFile.EnableHTTPS))
 	os.Setenv("TRUSTED_SUBNET", configFile.TrustedSubnet)
+	os.Setenv("GRPC_ADDRESS", configFile.GRPCURL)
+	os.Setenv("ENABLE_GRPC_TLS", strconv.FormatBool(configFile.EnableGRPCTLS))
 }
 
 // GetServerURL returns the server URL
@@ -151,4 +169,14 @@ func (o *Options) GetEnableHTTPS() bool {
 // GetTrustedSubnet returns trusted subnet
 func (o *Options) GetTrustedSubnet() string {
 	return o.trustedSubnet
+}
+
+// GetGRPCURL returns the gRPC server URL
+func (o *Options) GetGRPCURL() string {
+	return o.grpcURL
+}
+
+// GetEnableGRPCTLS returns the enable gRPC TLS flag
+func (o *Options) GetEnableGRPCTLS() bool {
+	return o.enableGRPCTLS
 }

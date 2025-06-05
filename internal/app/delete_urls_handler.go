@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-
-	"go.uber.org/zap"
 )
 
 // DeleteUserURLsHandler handles DELETE /api/user/urls requests
@@ -36,13 +34,11 @@ func (h *Handler) DeleteUserURLsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Asynchronously delete URLs
-	go func() {
-		if err := h.storage.DeleteURLs(userID, tokens); err != nil {
-			// Log error but don't return it to client as per requirements
-			h.logger.Error("Error deleting URLs", zap.Error(err))
-		}
-	}()
+	// Delete URLs using service (async operation)
+	if err := h.service.DeleteUserURLs(r.Context(), userID, tokens); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
 	// Return 202 Accepted immediately
 	w.WriteHeader(http.StatusAccepted)

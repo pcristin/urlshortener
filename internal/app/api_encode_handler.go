@@ -1,13 +1,10 @@
 package app
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/mailru/easyjson"
 	mod "github.com/pcristin/urlshortener/internal/models"
-	"github.com/pcristin/urlshortener/internal/storage"
-	uu "github.com/pcristin/urlshortener/internal/urlutils"
 )
 
 // Handler to encode the url with compressed data
@@ -30,22 +27,8 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	userID := getUserIDFromContext(req.Context())
 
 	// Encode the long URL to a short URL
-	shortURL, err := uu.EncodeURL(body.URL, h.storage, userID)
+	shortURL, alreadyExists, err := h.service.ShortenURL(req.Context(), body.URL, userID)
 	if err != nil {
-		if errors.Is(err, storage.ErrURLExists) {
-			response := mod.Response{
-				Result: h.constructURL(shortURL, req),
-			}
-			res.Header().Set("Content-Type", "application/json")
-			res.WriteHeader(http.StatusConflict)
-			responseBytes, err := easyjson.Marshal(response)
-			if err != nil {
-				http.Error(res, "internal server error: unable to marshal response", http.StatusInternalServerError)
-				return
-			}
-			res.Write(responseBytes)
-			return
-		}
 		http.Error(res, "bad request: unable to shorten provided url", http.StatusBadRequest)
 		return
 	}
@@ -56,7 +39,12 @@ func (h *Handler) APIEncodeHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	res.Header().Set("Content-Type", "application/json")
-	res.WriteHeader(http.StatusCreated)
+
+	if alreadyExists {
+		res.WriteHeader(http.StatusConflict)
+	} else {
+		res.WriteHeader(http.StatusCreated)
+	}
 
 	responseBytes, err := easyjson.Marshal(response)
 	if err != nil {

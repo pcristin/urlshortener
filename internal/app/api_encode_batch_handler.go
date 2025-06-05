@@ -1,14 +1,10 @@
 package app
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/mailru/easyjson"
 	mod "github.com/pcristin/urlshortener/internal/models"
-	"github.com/pcristin/urlshortener/internal/storage"
-	uu "github.com/pcristin/urlshortener/internal/urlutils"
-	"go.uber.org/zap"
 )
 
 // APIEncodeBatchHandler encodes a batch of sent urls
@@ -35,20 +31,29 @@ func (h *Handler) APIEncodeBatchHandler(res http.ResponseWriter, req *http.Reque
 	// Get user ID from context
 	userID := getUserIDFromContext(req.Context())
 
-	// Process URLs and collect responses
-	responses := make(mod.BatchResponse, 0, len(batchRequests))
-
-	for _, item := range batchRequests {
-		token, err := uu.EncodeURL(item.OriginalURL, h.storage, userID)
-		if err != nil && !errors.Is(err, storage.ErrURLExists) {
-			zap.L().Sugar().Errorw("Error encoding URL", "error", err, "url", item.OriginalURL)
-			http.Error(res, "internal server error", http.StatusInternalServerError)
-			return
+	// Convert to service layer format
+	items := make([]BatchItem, len(batchRequests))
+	for i, req := range batchRequests {
+		items[i] = BatchItem{
+			CorrelationID: req.CorrelationID,
+			OriginalURL:   req.OriginalURL,
 		}
-		responses = append(responses, mod.BatchResponseItem{
-			CorrelationID: item.CorrelationID,
-			ShortURL:      h.constructURL(token, req),
-		})
+	}
+
+	// Process URLs using service
+	results, err := h.service.ShortenBatch(req.Context(), items, userID)
+	if err != nil {
+		http.Error(res, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert results to response format
+	responses := make(mod.BatchResponse, len(results))
+	for i, result := range results {
+		responses[i] = mod.BatchResponseItem{
+			CorrelationID: result.CorrelationID,
+			ShortURL:      h.constructURL(result.ShortURL, req),
+		}
 	}
 
 	// Send response

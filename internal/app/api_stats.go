@@ -1,7 +1,6 @@
 package app
 
 import (
-	"net"
 	"net/http"
 
 	"github.com/mailru/easyjson"
@@ -10,23 +9,15 @@ import (
 // StatsHandler returns the stats of the URL shortener service (/api/internal/stats)
 func (h *Handler) StatsHandler(w http.ResponseWriter, r *http.Request) {
 	clientIP := r.Header.Get("X-Real-IP")
-	trusted := h.trustedSubnet
 
-	if trusted != "" {
-		_, trustedIP, err := net.ParseCIDR(trusted)
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusForbidden)
-			return
-		}
-
-		if !trustedIP.Contains(net.ParseIP(clientIP)) {
-			http.Error(w, "Unauthorized", http.StatusForbidden)
-			return
-		}
-	}
-
-	stats, err := h.storage.GetStats()
+	// Get stats using service (includes trusted subnet check)
+	stats, err := h.service.GetStats(r.Context(), clientIP)
 	if err != nil {
+		// If error contains "unauthorized", return 403
+		if err.Error() == "unauthorized: IP not in trusted subnet" {
+			http.Error(w, "Unauthorized", http.StatusForbidden)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
