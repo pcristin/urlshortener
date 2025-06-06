@@ -1,12 +1,8 @@
 package app
 
 import (
-	"errors"
 	"io"
 	"net/http"
-
-	"github.com/pcristin/urlshortener/internal/storage"
-	uu "github.com/pcristin/urlshortener/internal/urlutils"
 )
 
 // EncodeURLHandler handles requests to shorten a URL.
@@ -34,21 +30,20 @@ func (h *Handler) EncodeURLHandler(res http.ResponseWriter, req *http.Request) {
 	// Get user ID from context
 	userID := getUserIDFromContext(req.Context())
 
-	token, err := uu.EncodeURL(string(longURL), h.storage, userID)
+	token, alreadyExists, err := h.service.ShortenURL(req.Context(), string(longURL), userID)
 	if err != nil {
-		if errors.Is(err, storage.ErrURLExists) {
-			res.Header().Set("Content-Type", "text/plain")
-			res.WriteHeader(http.StatusConflict)
-			resBody := h.constructURL(token, req)
-			res.Write([]byte(resBody))
-			return
-		}
 		http.Error(res, "bad request: unable to shorten provided url", http.StatusBadRequest)
 		return
 	}
 
 	res.Header().Set("Content-Type", "text/plain")
-	res.WriteHeader(http.StatusCreated)
+
+	if alreadyExists {
+		res.WriteHeader(http.StatusConflict)
+	} else {
+		res.WriteHeader(http.StatusCreated)
+	}
+
 	resBody := h.constructURL(token, req)
 	res.Write([]byte(resBody))
 }

@@ -35,3 +35,16 @@ func (bs *BaseStorage) GetTokenByURL(url string) (string, bool) {
 	token, ok := bs.urlIndex[url]
 	return token, ok
 }
+
+// GetStats returns the stats of the URL shortener service
+func (bs *BaseStorage) GetStats() (models.Stats, error) {
+	users := make(map[string]bool)
+	for _, node := range bs.cache {
+		users[node.UserID] = true
+	}
+
+	return models.Stats{
+		URLs:  len(bs.cache),
+		Users: len(users),
+	}, nil
+}

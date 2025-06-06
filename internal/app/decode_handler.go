@@ -1,12 +1,9 @@
 package app
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/pcristin/urlshortener/internal/storage"
-	uu "github.com/pcristin/urlshortener/internal/urlutils"
 )
 
 // DecodeURLHandler handles requests to redirect from a shortened URL to the original URL.
@@ -29,13 +26,14 @@ func (h *Handler) DecodeURLHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	longURL, err := uu.DecodeURL(token, h.storage)
+	longURL, isDeleted, err := h.service.GetOriginalURL(req.Context(), token)
 	if err != nil {
-		if errors.Is(err, storage.ErrURLDeleted) {
-			http.Error(res, "URL was deleted", http.StatusGone)
-			return
-		}
 		http.Error(res, "bad request: unable to decode provided token", http.StatusBadRequest)
+		return
+	}
+
+	if isDeleted {
+		http.Error(res, "URL was deleted", http.StatusGone)
 		return
 	}
 

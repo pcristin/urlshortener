@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,9 +22,13 @@ import (
 	"github.com/pcristin/urlshortener/internal/database"
 	"github.com/pcristin/urlshortener/internal/gzip"
 	"github.com/pcristin/urlshortener/internal/logger"
+	"github.com/pcristin/urlshortener/internal/mytls"
+	"github.com/pcristin/urlshortener/internal/proto"
 	"github.com/pcristin/urlshortener/internal/storage"
-	"github.com/pcristin/urlshortener/internal/tls"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/reflection"
 )
 
 var (
@@ -67,6 +73,11 @@ func run() error {
 		return errors.New("configuration error | server address can not be empty")
 	}
 
+	grpcURL := config.GetGRPCURL()
+	if grpcURL == "" {
+		return errors.New("configuration error | gRPC address can not be empty")
+	}
+
 	// Determine storage type based on config
 	var storageType storage.StorageType
 	var dbPool *pgxpool.Pool
@@ -90,9 +101,65 @@ func run() error {
 	// Initialize storage with determined type
 	urlStorage := storage.NewURLStorage(storageType, filePath, dbPool)
 
-	// Initialize handler with storage and config
+	// Initialize service layer
+	service := app.NewURLService(urlStorage, config.GetBaseURL(), config.GetTrustedSubnet())
+
+	// Initialize HTTP handler
 	handler := app.NewHandler(urlStorage, config)
 
+	// Initialize gRPC server
+	grpcServer := app.NewGRPCServer(service, config.GetBaseURL())
+
+	// Create a wait group to manage both servers
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Channel for errors from servers
+	errChan := make(chan error, 2)
+
+	// Channel for notify about server shutdown
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	// Context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start HTTP server
+	go func() {
+		defer wg.Done()
+		if err := runHTTPServer(ctx, handler, config, log); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errChan <- fmt.Errorf("HTTP server error: %w", err)
+		}
+	}()
+
+	// Start gRPC server
+	go func() {
+		defer wg.Done()
+		if err := runGRPCServer(ctx, grpcServer, config, log); err != nil {
+			errChan <- fmt.Errorf("gRPC server error: %w", err)
+		}
+	}()
+
+	// Wait for shutdown signal or error
+	select {
+	case <-sigint:
+		log.Infow("Shutdown signal received")
+	case err := <-errChan:
+		log.Errorw("Server error", "error", err)
+	}
+
+	// Cancel context to trigger shutdown
+	cancel()
+
+	// Wait for both servers to finish
+	wg.Wait()
+
+	log.Infow("All servers stopped")
+	return nil
+}
+
+func runHTTPServer(ctx context.Context, handler app.HandlerInterface, config *config.Options, log *zap.SugaredLogger) error {
 	r := chi.NewRouter()
 
 	// Set up the middlewares: 60s timeout
@@ -105,11 +172,10 @@ func run() error {
 	r.Get("/ping", logger.WithLogging(handler.PingHandler, log))
 	r.Get("/api/user/urls", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.GetUserURLsHandler)), log))
 	r.Delete("/api/user/urls", logger.WithLogging(gzip.GzipMiddleware(handler.AuthMiddleware(handler.DeleteUserURLsHandler)), log))
+	r.Get("/api/internal/stats", logger.WithLogging(gzip.GzipMiddleware(handler.StatsHandler), log))
 
-	log.Infow(
-		"Running server on",
-		"address", serverURL,
-	)
+	serverURL := config.GetServerURL()
+	log.Infow("Starting HTTP server", "address", serverURL, "https", config.GetEnableHTTPS())
 
 	// Initialize server
 	server := &http.Server{
@@ -117,51 +183,69 @@ func run() error {
 		Handler: r,
 	}
 
-	// Graceful shutdown implementation
-	// This channel is used to notify the main goroutine that connections are closed
-	idleConnsClosed := make(chan struct{})
-
-	// Channel for notify about server shutdown
-	sigint := make(chan os.Signal, 1)
-
-	// Register the channel to receive SIGINT and SIGTERM signals
-	signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-
-	// Goroutine for graceful shutdown
+	// Graceful shutdown goroutine
 	go func() {
-		<-sigint
-		log.Infow("server shutting down...")
-		if err := server.Shutdown(context.Background()); err != nil {
-			log.Infow("server error | HTTP server shutdown error", "error", err)
-		}
-		close(idleConnsClosed)
-	}()
-
-	// Start server in a goroutine to allow graceful shutdown
-	go func() {
-		if config.GetEnableHTTPS() {
-			certManager := tls.GetTLSManager()
-			log.Infow("Running server on", "address", serverURL, "https", "true")
-			server.TLSConfig = certManager.TLSConfig()
-			if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				log.Errorw("server error", "error", err)
-				// Signal shutdown if server fails to start
-				sigint <- syscall.SIGTERM
-			}
-		} else {
-			log.Infow("Running server on", "address", serverURL, "https", "false")
-			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				log.Errorw("server error", "error", err)
-				// Signal shutdown if server fails to start
-				sigint <- syscall.SIGTERM
-			}
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Errorw("HTTP server shutdown error", "error", err)
 		}
 	}()
 
-	// Wait for all connections to be closed
-	<-idleConnsClosed
+	// Start server
+	if config.GetEnableHTTPS() {
+		certManager := mytls.GetTLSManager()
+		server.TLSConfig = certManager.TLSConfig()
+		return server.ListenAndServeTLS("", "")
+	}
+	return server.ListenAndServe()
+}
 
-	log.Infow("server stopped")
+func runGRPCServer(ctx context.Context, grpcServer *app.GRPCServer, config *config.Options, log *zap.SugaredLogger) error {
+	grpcURL := config.GetGRPCURL()
 
-	return nil
+	lis, err := net.Listen("tcp", grpcURL)
+	if err != nil {
+		return fmt.Errorf("failed to listen: %w", err)
+	}
+
+	// Create auth interceptor
+	authInterceptor := app.NewAuthInterceptor(config.GetSecret())
+
+	// Server options
+	var opts []grpc.ServerOption
+
+	// Add interceptors
+	opts = append(opts,
+		grpc.UnaryInterceptor(authInterceptor.UnaryServerInterceptor()),
+		grpc.StreamInterceptor(authInterceptor.StreamServerInterceptor()),
+	)
+
+	// Add TLS if enabled
+	if config.GetEnableGRPCTLS() {
+		certManager := mytls.GetTLSManager()
+		creds := credentials.NewTLS(certManager.TLSConfig())
+		opts = append(opts, grpc.Creds(creds))
+	}
+
+	// Create gRPC server
+	s := grpc.NewServer(opts...)
+
+	// Register service
+	proto.RegisterURLShortenerServiceServer(s, grpcServer)
+
+	// Register reflection service for debugging
+	reflection.Register(s)
+
+	log.Infow("Starting gRPC server", "address", grpcURL, "tls", config.GetEnableGRPCTLS())
+
+	// Graceful shutdown goroutine
+	go func() {
+		<-ctx.Done()
+		s.GracefulStop()
+	}()
+
+	// Start server
+	return s.Serve(lis)
 }

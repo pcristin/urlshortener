@@ -25,8 +25,8 @@ func (h *Handler) GetUserURLsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user's URLs from storage
-	urls, err := h.storage.GetUserURLs(userID)
+	// Get user's URLs from service
+	urls, err := h.service.GetUserURLs(r.Context(), userID)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -38,7 +38,7 @@ func (h *Handler) GetUserURLsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert storage nodes to response format
+	// Convert to response format
 	response := make([]UserURL, len(urls))
 	for i, url := range urls {
 		response[i] = UserURL{

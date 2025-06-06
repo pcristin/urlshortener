@@ -70,6 +70,11 @@ func (m *MockStorager) DeleteURLs(userID string, tokens []string) error {
 	return args.Error(0)
 }
 
+func (m *MockStorager) GetStats() (models.Stats, error) {
+	args := m.Called()
+	return args.Get(0).(models.Stats), args.Error(1)
+}
+
 func TestEncodeURL(t *testing.T) {
 	// Create a mock storage
 	mockStorage := new(MockStorager)

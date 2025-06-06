@@ -2,8 +2,6 @@ package app
 
 import (
 	"net/http"
-
-	"github.com/pcristin/urlshortener/internal/storage"
 )
 
 // Handler to check the connectivity to the database
@@ -13,14 +11,9 @@ func (h *Handler) PingHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Get the database storage (this handler only applicable for DB storage)
-	storage, ok := h.storage.(*storage.DatabaseStorage)
-	if !ok || storage.GetDBPool() == nil {
-		http.Error(res, "database not configured", http.StatusInternalServerError)
-		return
-	}
-
-	if err := storage.GetDBPool().Ping(req.Context()); err != nil {
+	// Check database connectivity using service
+	dbOk, err := h.service.Ping(req.Context())
+	if err != nil || !dbOk {
 		http.Error(res, "internal server error", http.StatusInternalServerError)
 		return
 	}

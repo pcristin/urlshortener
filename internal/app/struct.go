@@ -11,7 +11,7 @@ import (
 // Handler implements the HandlerInterface and provides HTTP request handling functionality
 // for the URL shortener service. It manages URL storage, authentication, and URL construction.
 type Handler struct {
-	storage storage.URLStorager
+	service *URLService
 	secret  string
 	baseURL string
 	logger  *zap.Logger
@@ -26,8 +26,10 @@ func NewHandler(storage storage.URLStorager, config *config.Options) HandlerInte
 		secret = "your-secret-key" // fallback for tests and development
 	}
 
+	service := NewURLService(storage, config.GetBaseURL(), config.GetTrustedSubnet())
+
 	return &Handler{
-		storage: storage,
+		service: service,
 		secret:  secret,
 		baseURL: config.GetBaseURL(),
 		logger:  zap.L(),

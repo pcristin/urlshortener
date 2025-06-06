@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package urlshortener;
+
+option go_package = "github.com/pcristin/urlshortener/internal/proto";
+
+// URLShortenerService defines the gRPC service for URL shortening operations
+service URLShortenerService {
+  // ShortenURL creates a shortened URL from a long URL
+  rpc ShortenURL(ShortenURLRequest) returns (ShortenURLResponse);
+  
+  // GetOriginalURL retrieves the original URL by its token
+  rpc GetOriginalURL(GetOriginalURLRequest) returns (GetOriginalURLResponse);
+  
+  // ShortenBatch creates multiple shortened URLs in a single request
+  rpc ShortenBatch(ShortenBatchRequest) returns (ShortenBatchResponse);
+  
+  // GetUserURLs returns all URLs shortened by the authenticated user
+  rpc GetUserURLs(GetUserURLsRequest) returns (GetUserURLsResponse);
+  
+  // DeleteUserURLs marks specified URLs as deleted for the authenticated user
+  rpc DeleteUserURLs(DeleteUserURLsRequest) returns (DeleteUserURLsResponse);
+  
+  // Ping checks the health of the service and database connectivity
+  rpc Ping(PingRequest) returns (PingResponse);
+  
+  // GetStats returns statistics about the URL shortener service
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
+}
+
+// Request and Response messages
+
+message ShortenURLRequest {
+  string url = 1; // The long URL to shorten
+}
+
+message ShortenURLResponse {
+  string result = 1; // The shortened URL
+  bool already_exists = 2; // True if URL already existed in the system
+}
+
+message GetOriginalURLRequest {
+  string token = 1; // The token/ID from shortened URL
+}
+
+message GetOriginalURLResponse {
+  string original_url = 1; // The original long URL
+  bool is_deleted = 2; // True if URL has been marked as deleted
+}
+
+message ShortenBatchRequest {
+  repeated BatchItem items = 1;
+  
+  message BatchItem {
+    string correlation_id = 1; // Client-provided ID to match request/response
+    string original_url = 2; // The long URL to shorten
+  }
+}
+
+message ShortenBatchResponse {
+  repeated BatchResult results = 1;
+  
+  message BatchResult {
+    string correlation_id = 1; // Matches the correlation_id from request
+    string short_url = 2; // The shortened URL
+  }
+}
+
+message GetUserURLsRequest {
+  // Empty - user identified via metadata
+}
+
+message GetUserURLsResponse {
+  repeated UserURL urls = 1;
+  
+  message UserURL {
+    string short_url = 1; // The shortened URL
+    string original_url = 2; // The original URL
+  }
+}
+
+message DeleteUserURLsRequest {
+  repeated string tokens = 1; // List of tokens to delete
+}
+
+message DeleteUserURLsResponse {
+  // Empty - operation is async
+}
+
+message PingRequest {
+  // Empty
+}
+
+message PingResponse {
+  bool database_ok = 1; // True if database is accessible
+}
+
+message GetStatsRequest {
+  // Empty - authorization checked via metadata
+}
+
+message GetStatsResponse {
+  int32 urls = 1; // Total number of URLs in the system
+  int32 users = 2; // Total number of unique users
+} 
